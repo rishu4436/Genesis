@@ -1,0 +1,57 @@
+flowchart TB
+    subgraph Data["Data Layer (CMC Agent Hub)"]
+        MCP["CMC MCP Client<br/>mcp.coinmarketcap.com"]
+        Quotes["Price Quotes"]
+        Tech["Technical Indicators"]
+        Sent["Sentiment / KOL"]
+        Chain["On-Chain Flows"]
+        Deriv["Derivatives / Funding"]
+        News["News Summaries"]
+        MCP --> Quotes & Tech & Sent & Chain & Deriv & News
+    end
+
+    subgraph Decision["Decision Layer"]
+        Agg["Signal Aggregator<br/>Weighted Fusion"]
+        LLM["Strategy Engine<br/>instructor + Pydantic"]
+        Risk["Risk Manager<br/>HARD Enforcement"]
+        Quotes & Tech & Sent & Chain & Deriv & News --> Agg
+        Agg --> LLM
+        LLM --> Risk
+    end
+
+    subgraph Execution["Execution Layer (TWAK)"]
+        TWAK["TWAK CLI Wrapper<br/>Autonomous Wallet"]
+        Spot["PancakeSwap Spot Swap"]
+        Perps["PancakeSwap Perps<br/>(stub)"]
+        X402["x402 Micropayments"]
+        Risk -->|approved| TWAK
+        TWAK --> Spot & Perps & X402
+    end
+
+    subgraph OnChain["On-Chain Identity"]
+        BNB["BNB AI Agent SDK<br/>ERC-8004"]
+        Registry["Identity Registry"]
+        Compete["Competition Registration"]
+        BNB --> Registry & Compete
+    end
+
+    subgraph Storage["Local Storage"]
+        DB["SQLite Audit DB"]
+        Logs["Structured Logs"]
+    end
+
+    subgraph UI["Monitoring"]
+        CLI["Typer CLI"]
+        Dash["FastAPI Dashboard"]
+    end
+
+    Spot --> DB
+    LLM --> DB
+    Agg --> DB
+    DB --> CLI & Dash
+    Logs --> CLI & Dash
+
+    style Risk fill:#ef4444,color:#fff
+    style TWAK fill:#22c55e,color:#fff
+    style MCP fill:#3b82f6,color:#fff
+    style BNB fill:#8b5cf6,color:#fff

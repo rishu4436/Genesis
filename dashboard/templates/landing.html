@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genesis — Autonomous AI Trader on BSC</title>
+    <meta name="description" content="Genesis is a live self-custody autonomous trading agent on BNB Chain mainnet. CMC intelligence, Grok decisions, TWAK execution, ERC-8004 identity, and full audit trails.">
+    <link rel="icon" href="/favicon.ico" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/landing.css?v={{ asset_version }}">
+</head>
+<body class="landing">
+    <div class="bg-canvas" aria-hidden="true">
+        <div class="bg-aurora bg-aurora-1"></div>
+        <div class="bg-aurora bg-aurora-2"></div>
+        <div class="bg-aurora bg-aurora-3"></div>
+        <div class="bg-beam"></div>
+        <div class="bg-grid"></div>
+        <div class="bg-orb bg-orb-1"></div>
+        <div class="bg-orb bg-orb-2"></div>
+        <div class="bg-orb bg-orb-3"></div>
+        <div class="bg-particles" id="bg-particles"></div>
+        <div class="bg-vignette"></div>
+    </div>
+    <div class="landing-wrap">
+
+        <nav class="landing-nav">
+            <a href="/" class="nav-brand">
+                <span class="nav-logo-wrap">{{ genesis_logo(40, 'nav') }}</span>
+                <span class="nav-brand-text">
+                    <span class="genesis-wordmark-main">Genesis</span>
+                    <span class="genesis-wordmark-tag">AI Trader</span>
+                </span>
+            </a>
+            <button class="nav-toggle" aria-label="Menu">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 6h16M4 12h16M4 18h16"/>
+                </svg>
+            </button>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#how-it-works">How It Works</a>
+                <a href="#agent">Live Agent</a>
+                <a href="/app/strategy">Strategy Skills</a>
+                <a href="/app" class="nav-cta">
+                    Launch Agent
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                </a>
+            </div>
+        </nav>
+
+        <section class="hero hero-modern">
+            <div class="hero-badge">
+                <span class="hero-badge-dot"></span>
+                BNB Chain × CoinMarketCap Hackathon · Track 1 + Track 2
+                {% if agent_id %} · Agent #{{ agent_id }}{% endif %}
+            </div>
+            <div class="hero-logo-wrap">
+                <div class="hero-logo-glow"></div>
+                <div class="hero-logo">{{ genesis_logo(112, 'hero') }}</div>
+            </div>
+            <h1 class="hero-wordmark">
+                <span class="genesis-wordmark-main genesis-wordmark-hero">Genesis</span>
+                <span class="genesis-wordmark-sub">Autonomous Trader on BSC Mainnet</span>
+            </h1>
+            <p class="hero-sub">
+                Live self-custody agent: CoinMarketCap signals, structured {% if llm_enabled %}{{ llm_provider|title }}{% else %}rule-based{% endif %} decisions,
+                hard risk limits, and PancakeSwap execution via Trust Wallet Agent Kit —
+                with ERC-8004 on-chain identity and a full auditable decision trail.
+            </p>
+            <div class="hero-actions">
+                <a href="/app" class="btn-launch">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    Launch Agent
+                </a>
+                {% if agent_endpoint %}
+                <a href="{{ agent_endpoint }}/erc8183/status" class="btn-ghost" target="_blank" rel="noopener">Agent status</a>
+                {% else %}
+                <a href="#how-it-works" class="btn-ghost">See how it works</a>
+                {% endif %}
+            </div>
+        </section>
+
+        <div class="stats-strip">
+            <div class="stat-card">
+                <div class="stat-value">BSC Mainnet</div>
+                <div class="stat-label">Network</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ allowed_token_count }}</div>
+                <div class="stat-label">Allowlisted Tokens</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ risk.max_open_positions }}</div>
+                <div class="stat-label">Max Open Positions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{% if llm_enabled %}{{ llm_provider|title }}{% else %}Rules{% endif %}</div>
+                <div class="stat-label">{% if llm_enabled %}{{ llm_model }}{% else %}Decision Engine{% endif %}</div>
+            </div>
+        </div>
+
+        <section id="features" class="landing-section">
+            <div class="section-eyebrow reveal">Capabilities</div>
+            <h2 class="section-heading reveal">What Genesis does</h2>
+            <p class="section-desc reveal">
+                An end-to-end autonomous loop on BNB Chain — from market data to signed swaps,
+                with every step logged for review.
+            </p>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">📡</div>
+                    <h3>CMC Agent Hub</h3>
+                    <p>12 MCP tools for quotes, technicals, sentiment, on-chain metrics, derivatives, and news.{% if x402_enabled %} x402 micropayments on {{ x402_network|title }} as fallback.{% endif %}</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔐</div>
+                    <h3>TWAK Self-Custody</h3>
+                    <p>Trust Wallet Agent Kit signs locally on your machine. PancakeSwap spot swaps with configurable slippage and retry logic.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🛡️</div>
+                    <h3>Risk Manager</h3>
+                    <p>{{ risk.max_open_positions }} max positions, {{ risk.spot_stable_pct }}% spot sizing, {{ risk.max_drawdown_pct }}% drawdown halt, {{ risk.cooldown_minutes }} min cooldown, and {{ risk.min_confidence }} confidence floor.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🧠</div>
+                    <h3>{{ llm_provider|title if llm_enabled else 'Rule' }} Decisions</h3>
+                    <p>{% if llm_enabled %}Structured {{ llm_model }} outputs{% else %}Deterministic rules{% endif %} — buy, sell, or hold with confidence, sizing, and reasoning validated before execution.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🪪</div>
+                    <h3>ERC-8004 Identity</h3>
+                    <p>On-chain agent registration via BNB AI Agent SDK{% if agent_id %} — Agent #{{ agent_id }}{% endif %}. Public status at <code>/erc8183/status</code>.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📊</div>
+                    <h3>Live Dashboard</h3>
+                    <p>Portfolio value, bullish/neutral/bearish signal feed, last decisions, on-chain swaps with BscScan links, and exportable audit trail.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">📐</div>
+                    <h3>Track 2 Strategy Skill</h3>
+                    <p>Backtestable CMC strategy spec — RSI, MACD, Fear &amp; Greed, holders, and news fused into entry/exit rules. <a href="/api/strategy-skill">View spec</a> or export via <code>genesis strategy-skill export</code>.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="how-it-works" class="landing-section">
+            <div class="section-eyebrow reveal">Process</div>
+            <h2 class="section-heading reveal">Autonomous cycle</h2>
+            <p class="section-desc reveal">
+                Every {{ loop_interval // 60 }} minutes the agent runs observe → decide → validate → execute,
+                or re-evaluates early when conviction shifts beyond {{ signal_change_pct }}%.
+            </p>
+            <div class="steps">
+                <div class="step" data-step="1">
+                    <div class="step-num">1</div>
+                    <div class="step-content">
+                        <h3>Scan &amp; aggregate signals</h3>
+                        <p>CMC MCP fetches quotes, technicals, sentiment, funding, and news for allowlisted tokens. Signals are fused into per-token conviction scores.</p>
+                        <div class="step-tags">
+                            <span class="step-tag">CMC MCP</span>
+                            <span class="step-tag">{{ allowed_token_count }} tokens</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="step" data-step="2">
+                    <div class="step-num">2</div>
+                    <div class="step-content">
+                        <h3>Decide</h3>
+                        <p>{{ strategy }} strategy outputs a typed action with asset, confidence, and reasoning.</p>
+                        <div class="step-tags">
+                            <span class="step-tag">{% if llm_enabled %}{{ llm_provider|title }} · {{ llm_model }}{% else %}Rule Engine{% endif %}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="step" data-step="3">
+                    <div class="step-num">3</div>
+                    <div class="step-content">
+                        <h3>Risk check</h3>
+                        <p>Hard limits: {{ risk.max_drawdown_pct }}% max drawdown, {{ risk.spot_stable_pct }}% of stables per spot swap, {{ risk.max_slippage_bps }} bps slippage cap, {{ risk.max_open_positions }} positions max.</p>
+                        <div class="step-tags">
+                            <span class="step-tag">Allowlist</span>
+                            <span class="step-tag">Cooldown</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="step" data-step="4">
+                    <div class="step-num">4</div>
+                    <div class="step-content">
+                        <h3>Execute on BSC</h3>
+                        <p>TWAK signs and routes swaps through PancakeSwap. Each trade records tx hash, price, and token amounts.{% if perps_enabled %} Perps module enabled (up to {{ perps_max_leverage }}x).{% endif %}</p>
+                        <div class="step-tags">
+                            <span class="step-tag">TWAK</span>
+                            <span class="step-tag">PancakeSwap</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="step" data-step="5">
+                    <div class="step-num">5</div>
+                    <div class="step-content">
+                        <h3>Audit &amp; monitor</h3>
+                        <p>SQLite stores signals, decisions, risk validation, trades, and portfolio snapshots. Dashboard and <code>/api/audit/export</code> expose the full trail.</p>
+                        <div class="step-tags">
+                            <span class="step-tag">Dashboard</span>
+                            <span class="step-tag">Audit API</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="pipeline reveal">
+                <span class="pipeline-node">CMC MCP</span>
+                <span class="pipeline-arrow">→</span>
+                <span class="pipeline-node">Signals</span>
+                <span class="pipeline-arrow">→</span>
+                <span class="pipeline-node">{% if llm_enabled %}{{ llm_provider|title }}{% else %}Rules{% endif %}</span>
+                <span class="pipeline-arrow">→</span>
+                <span class="pipeline-node">Risk</span>
+                <span class="pipeline-arrow">→</span>
+                <span class="pipeline-node">TWAK</span>
+                <span class="pipeline-arrow">→</span>
+                <span class="pipeline-node">Audit</span>
+            </div>
+        </section>
+
+        <section id="agent" class="landing-section">
+            <div class="section-eyebrow reveal">Live Agent</div>
+            <h2 class="section-heading reveal">For judges &amp; reviewers</h2>
+            <div class="details-grid">
+                <div class="detail-card reveal">
+                    <h3>📊 Monitoring</h3>
+                    <ul class="detail-list">
+                        <li><a href="/app">Live dashboard</a> — portfolio, CMC top 5, decisions, swaps</li>
+                        <li><a href="/api/status">API status</a> — agent state and cycle feed</li>
+                        <li><a href="/erc8183/status">ERC-8183 status</a> — on-chain agent metadata</li>
+                        <li><a href="/api/audit/export" target="_blank" rel="noopener">Audit export</a> — full JSON trail</li>
+                        {% if public_view_only %}
+                        <li>Public URL is <strong>view-only</strong> — agent controls run on localhost only</li>
+                        {% endif %}
+                    </ul>
+                </div>
+                <div class="detail-card reveal">
+                    <h3>🛡️ Risk limits</h3>
+                    <ul class="detail-list">
+                        <li>{{ risk.max_open_positions }} max open positions</li>
+                        <li>{{ risk.spot_stable_pct }}% of USDT/USDC per spot swap</li>
+                        <li>{{ risk.max_drawdown_pct }}% drawdown halt</li>
+                        <li>{{ risk.cooldown_minutes }} min cooldown per token</li>
+                        <li>Min confidence: {{ risk.min_confidence }}</li>
+                    </ul>
+                </div>
+                <div class="detail-card reveal">
+                    <h3>🔑 Self-custody</h3>
+                    <ul class="detail-list">
+                        <li>Keys signed locally via TWAK — never sent to a server</li>
+                        <li>Direct DEX swaps on BSC — no CEX</li>
+                        <li>ERC-8004 on-chain identity{% if agent_id %} (#{{ agent_id }}){% endif %}</li>
+                        <li>Full local audit trail with BscScan tx links</li>
+                    </ul>
+                </div>
+                <div class="detail-card reveal">
+                    <h3>🏆 Competition</h3>
+                    <ul class="detail-list">
+                        <li>Track 1 — Autonomous trading agent (live BSC)</li>
+                        <li>Track 2 — <a href="/api/strategy-skill">Strategy Skill</a> (backtestable CMC spec)</li>
+                        {% if agent_id %}<li>ERC-8004 agent <strong>#{{ agent_id }}</strong></li>{% endif %}
+                        <li>Strategy: {{ strategy }}</li>
+                        <li>Live on BSC mainnet</li>
+                        {% if agent_endpoint %}
+                        <li>Public endpoint: <a href="{{ agent_endpoint }}" target="_blank" rel="noopener">{{ agent_endpoint }}</a></li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+
+            <div class="cta-band reveal">
+                <h2>View the live agent</h2>
+                <p>Open the dashboard to see portfolio value, market signals, recent decisions, and on-chain trades.</p>
+                <a href="/app" class="btn-launch">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    Launch Agent
+                </a>
+            </div>
+        </section>
+
+        <footer class="landing-footer">
+            <span>Genesis v0.1.0 · {{ agent_name }}{% if agent_id %} · #{{ agent_id }}{% endif %} · BSC Mainnet</span>
+            <div class="footer-links">
+                <a href="/app">Dashboard</a>
+                <a href="/erc8183/status">Agent Status</a>
+                <a href="/api/audit/export">Audit</a>
+                <a href="https://dora-hacks.io/hackathon/bnb-trading-agent" target="_blank" rel="noopener">Hackathon</a>
+            </div>
+        </footer>
+    </div>
+
+    <script src="/static/js/landing.js?v={{ asset_version }}"></script>
+</body>
+</html>

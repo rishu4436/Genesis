@@ -1,0 +1,57 @@
+# Environment & secrets
+.env
+*.env.local
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# Runtime data (local only — never commit)
+data/*
+!data/.gitkeep
+!data/logs/
+data/logs/*
+!data/logs/.gitkeep
+
+# Databases & exports
+*.db
+*.sqlite3
+*.sqlite
+
+# Logs
+*.log
+logs/
+
+# Binaries (cloudflared is downloaded on demand)
+bin/*
+!bin/.gitkeep
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Secrets — NEVER commit
+*.pem
+*.key
+wallets/

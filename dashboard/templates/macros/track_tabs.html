@@ -1,0 +1,12 @@
+{% macro render(active_track) %}
+<nav class="track-switcher" aria-label="Hackathon tracks">
+    <a href="/app" class="track-tab{% if active_track == 1 %} is-active{% endif %}" title="Track 1: Live Autonomous Trading Agent">
+        <span class="track-tab-num">Track 1</span>
+        <span class="track-tab-label">Live Agent</span>
+    </a>
+    <a href="/app/strategy" class="track-tab{% if active_track == 2 %} is-active{% endif %}" title="Track 2: Strategy Skill Generator">
+        <span class="track-tab-num">Track 2</span>
+        <span class="track-tab-label">Strategy Generator</span>
+    </a>
+</nav>
+{% endmacro %}

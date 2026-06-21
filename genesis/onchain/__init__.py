@@ -1,0 +1,1 @@
+"""On-chain identity and competition registration."""

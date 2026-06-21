@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ agent_name }} — Strategy Skill Generator</title>
+    <link rel="icon" href="/favicon.ico" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/dashboard.css?v={{ asset_version }}">
+</head>
+<body class="dashboard-app track2-app">
+    <div class="bg-canvas" aria-hidden="true">
+        <div class="bg-aurora bg-aurora-1"></div>
+        <div class="bg-aurora bg-aurora-2"></div>
+        <div class="bg-aurora bg-aurora-3"></div>
+        <div class="bg-beam"></div>
+        <div class="bg-grid"></div>
+        <div class="bg-orb bg-orb-1"></div>
+        <div class="bg-orb bg-orb-2"></div>
+        <div class="bg-orb bg-orb-3"></div>
+        <div class="bg-particles" id="bg-particles"></div>
+        <div class="bg-vignette"></div>
+    </div>
+
+    <div class="app">
+        <header class="header header-slim">
+            <div class="brand">
+                <div class="logo-wrap logo-wrap-sm">
+                    <div class="logo-glow"></div>
+                    {{ genesis_logo(40, 't2') }}
+                </div>
+                <div class="brand-text">
+                    <div class="genesis-wordmark">
+                        <span class="genesis-wordmark-main">Genesis</span>
+                        <span class="genesis-wordmark-tag">Strategy Skills</span>
+                    </div>
+                    <div class="brand-meta">
+                        <span>{{ network }}</span>
+                        <span class="meta-dot"></span>
+                        <span>Track 2 — {{ allowed_token_count }} tokens</span>
+                    </div>
+                </div>
+            </div>
+            <div class="header-actions">
+                <a href="/" class="btn btn-ghost btn-icon-only" title="Home">←</a>
+                {% if x402_enabled %}<span class="pill pill-x402">x402</span>{% endif %}
+                <span class="pill pill-track2">Track 2</span>
+            </div>
+        </header>
+
+        {% from 'macros/track_tabs.html' import render as track_tabs %}
+        {{ track_tabs(active_track) }}
+
+        <section class="track2-hero glass-card">
+            <div class="track2-hero-text">
+                <h1>Strategy Skill Generator</h1>
+                <p>Turn CMC market conditions into a <strong>complete, backtestable</strong> trading strategy JSON. Same signal fusion as the live agent — without executing trades.</p>
+            </div>
+            <div class="track2-hero-actions">
+                <button type="button" id="btn-generate" class="btn btn-primary">Generate Strategy</button>
+                <button type="button" id="btn-copy" class="btn btn-ghost" disabled>Copy JSON</button>
+                <a id="btn-download" class="btn btn-ghost" href="#" download>Download</a>
+            </div>
+        </section>
+
+        <div class="track2-layout">
+            <aside class="track2-form glass-card">
+                <h2 class="section-title">Market Conditions</h2>
+                <form id="strategy-form" class="track2-fields">
+                    <label class="field">
+                        <span class="field-label">Primary Asset</span>
+                        <input type="text" name="primary_asset" value="{{ default_asset }}" placeholder="BNB" class="field-input" autocomplete="off">
+                    </label>
+                    <label class="field">
+                        <span class="field-label">Timeframe</span>
+                        <select name="timeframe" class="field-input">
+                            <option value="1m">1m</option>
+                            <option value="5m" selected>5m</option>
+                            <option value="15m">15m</option>
+                            <option value="1h">1h</option>
+                            <option value="4h">4h</option>
+                            <option value="1d">1d</option>
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span class="field-label">Risk Profile</span>
+                        <select name="risk_profile" class="field-input">
+                            <option value="conservative" selected>Conservative</option>
+                            <option value="moderate">Moderate</option>
+                            <option value="aggressive">Aggressive</option>
+                        </select>
+                    </label>
+                    <label class="field">
+                        <span class="field-label">Market Regime</span>
+                        <select name="market_regime" class="field-input">
+                            <option value="bullish" selected>Bullish</option>
+                            <option value="bearish">Bearish</option>
+                            <option value="neutral">Neutral</option>
+                            <option value="volatile">Volatile</option>
+                        </select>
+                    </label>
+                    <div class="field-row">
+                        <label class="field">
+                            <span class="field-label">Take Profit %</span>
+                            <input type="number" name="take_profit_pct" value="12" min="1" max="100" step="0.5" class="field-input">
+                        </label>
+                        <label class="field">
+                            <span class="field-label">Stop Loss %</span>
+                            <input type="number" name="stop_loss_pct" value="6" min="0.5" max="50" step="0.5" class="field-input">
+                        </label>
+                    </div>
+                    <label class="field">
+                        <span class="field-label">Backtest Audits</span>
+                        <input type="number" name="backtest_limit" value="50" min="1" max="200" class="field-input">
+                    </label>
+                    <label class="field">
+                        <span class="field-label">Simulate Idle Cycles (adaptive)</span>
+                        <input type="number" name="idle_cycles" value="0" min="0" max="100" class="field-input">
+                    </label>
+                </form>
+            </aside>
+
+            <main class="track2-output">
+                <div class="track2-summary glass-card" id="strategy-summary">
+                    <h2 class="section-title">Strategy Summary</h2>
+                    <p class="track2-placeholder" id="summary-placeholder">Configure conditions and click <em>Generate Strategy</em> to preview entry/exit rules, indicators, and risk envelope.</p>
+                    <div id="summary-content" hidden>
+                        <p id="summary-nl" class="summary-nl"></p>
+                        <div class="summary-grid" id="summary-grid"></div>
+                    </div>
+                </div>
+
+                <div class="track2-backtest glass-card" id="backtest-panel">
+                    <h2 class="section-title">Backtest Preview</h2>
+                    <div class="backtest-metrics" id="backtest-metrics">
+                        <span class="track2-placeholder">Runs audit replay against stored agent cycles.</span>
+                    </div>
+                </div>
+
+                <div class="track2-json glass-card">
+                    <div class="track2-json-header">
+                        <h2 class="section-title">Strategy JSON</h2>
+                        <span class="mono track2-json-hint">Machine-readable · backtestable</span>
+                    </div>
+                    <pre id="strategy-json" class="track2-json-pre"><code class="track2-placeholder">// Generated strategy appears here</code></pre>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="/static/js/track2.js?v={{ asset_version }}"></script>
+</body>
+</html>

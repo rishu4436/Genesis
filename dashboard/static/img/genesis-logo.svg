@@ -1,0 +1,26 @@
+<svg class="genesis-logo-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" aria-hidden="true" role="img">
+  <defs>
+    <linearGradient id="gen-bg" x1="8" y1="6" x2="40" y2="42" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1a160e"/>
+      <stop offset="100%" stop-color="#060508"/>
+    </linearGradient>
+    <linearGradient id="gen-gold" x1="12" y1="10" x2="36" y2="38" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFF6C8"/>
+      <stop offset="55%" stop-color="#FCD535"/>
+      <stop offset="100%" stop-color="#C9920A"/>
+    </linearGradient>
+    <filter id="gen-glow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-color="#FCD535" flood-opacity="0.4"/>
+    </filter>
+    <clipPath id="gen-clip">
+      <rect width="48" height="48" rx="13"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#gen-clip)">
+    <rect width="48" height="48" rx="13" fill="url(#gen-bg)"/>
+    <rect x="1" y="1" width="46" height="46" rx="12" stroke="url(#gen-gold)" stroke-width="1.25" fill="none" opacity="0.65"/>
+    <g filter="url(#gen-glow)">
+      <path fill="url(#gen-gold)" d="M24.3 37.6Q21.2 37.6 18.6 36.6Q16.0 35.6 14.1 33.7Q12.1 31.9 11.1 29.4Q10.0 26.9 10.0 24.0Q10.0 21.0 11.1 18.6Q12.3 16.1 14.3 14.3Q16.3 12.4 18.9 11.4Q21.6 10.4 24.6 10.4Q28.3 10.4 31.2 11.7Q34.1 12.9 35.9 15.1L30.9 20.0Q29.5 18.5 28.1 17.7Q26.6 16.9 24.5 16.9Q22.6 16.9 21.0 17.8Q19.4 18.6 18.4 20.2Q17.5 21.8 17.5 24.0Q17.5 26.1 18.4 27.7Q19.2 29.3 20.8 30.2Q22.3 31.1 24.4 31.1Q26.4 31.1 27.8 30.3Q29.1 29.5 29.9 28.1Q30.6 26.7 30.6 24.7L35.6 27.9L23.4 27.5V21.6H38.0V22.7Q38.0 27.5 36.3 30.8Q34.6 34.1 31.5 35.9Q28.4 37.6 24.3 37.6Z"/>
+    </g>
+  </g>
+</svg>

@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ agent_name }} — Genesis Dashboard</title>
+    <link rel="icon" href="/favicon.ico" type="image/svg+xml">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@700;800;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/htmx.org@2.0.0"></script>
+    <link rel="stylesheet" href="/static/css/dashboard.css?v={{ asset_version }}">
+</head>
+{% macro logic_token_card(t) %}
+<details class="logic-token logic-feed-token {{ t.direction }}{% if t.is_decision_target %} is-target{% endif %}" data-direction="{{ t.direction }}" data-symbol="{{ t.symbol }}">
+    <summary class="logic-token-summary">
+        <span class="logic-symbol">{{ t.symbol }}</span>
+        <span class="logic-conviction">={{ "%.2f"|format(t.conviction) }}</span>
+        <span class="logic-direction {{ t.direction }}">{{ t.direction }}</span>
+        {% if t.chip_preview %}<span class="token-chip-preview">{{ t.chip_preview }}</span>{% endif %}
+        <span class="logic-components-preview mono">{{ t.components_line }}</span>
+        <button type="button" class="token-insight-btn" title="Token insights" data-token-detail='{{ t|tojson }}' aria-label="View {{ t.symbol }} details">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        </button>
+        {% if t.is_decision_target %}<span class="logic-target-badge">★</span>{% endif %}
+    </summary>
+    <div class="logic-token-body">
+        {% if t.summary %}<p class="logic-summary">{{ t.summary }}</p>{% endif %}
+        <div class="logic-bars">
+            {% for key, val in t.components.items() %}
+            <div class="logic-bar-row">
+                <span class="logic-bar-label">{{ key }}</span>
+                <div class="logic-bar-track"><div class="logic-bar-fill" style="width:{{ (val * 100)|int }}%"></div></div>
+                <span class="logic-bar-val">{{ "%.2f"|format(val) }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</details>
+{% endmacro %}
+<body class="dashboard-app" data-refresh-interval="90000" data-live-interval="20000" hx-indicator=".refresh-overlay">
+    <div class="bg-canvas" aria-hidden="true">
+        <div class="bg-aurora bg-aurora-1"></div>
+        <div class="bg-aurora bg-aurora-2"></div>
+        <div class="bg-aurora bg-aurora-3"></div>
+        <div class="bg-beam"></div>
+        <div class="bg-grid"></div>
+        <div class="bg-orb bg-orb-1"></div>
+        <div class="bg-orb bg-orb-2"></div>
+        <div class="bg-orb bg-orb-3"></div>
+        <div class="bg-particles" id="bg-particles"></div>
+        <div class="bg-vignette"></div>
+    </div>
+    <div class="refresh-overlay"><div class="refresh-spinner"></div></div>
+
+    <div class="app">
+        <header class="header header-slim">
+            <div class="brand">
+                <div class="logo-wrap logo-wrap-sm">
+                    <div class="logo-glow"></div>
+                    {{ genesis_logo(40, 'dash') }}
+                </div>
+                <div class="brand-text">
+                    <div class="genesis-wordmark">
+                        <span class="genesis-wordmark-main">Genesis</span>
+                        <span class="genesis-wordmark-tag">AI Trader</span>
+                    </div>
+                    <div class="brand-meta">
+                        <span>{{ network }}</span>
+                        <span class="meta-dot"></span>
+                        <span>{{ strategy }}</span>
+                    </div>
+                </div>
+            </div>
+            <div class="header-actions">
+                <a href="/" class="btn btn-ghost btn-icon-only" title="Home">←</a>
+                {% if llm_enabled %}<span class="pill pill-llm-on">LLM</span>{% else %}<span class="pill pill-llm-off">Rules</span>{% endif %}
+                {% if x402_enabled %}<span class="pill pill-x402">x402</span>{% endif %}
+                <button id="refresh-btn" class="btn btn-primary btn-icon-only"
+                    hx-get="/app" hx-target="body" hx-swap="innerHTML"
+                    hx-indicator=".refresh-overlay" title="Refresh">
+                    <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+                        <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/>
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        {% from 'macros/track_tabs.html' import render as track_tabs %}
+        {{ track_tabs(active_track|default(1)) }}
+
+        <!-- Top: wallet hero + compact agent controls -->
+        <section class="hero-top">
+            <div class="wallet-hero glass-card">
+                <div class="wallet-hero-top">
+                    <div class="wallet-hero-main">
+                        <div class="wallet-hero-label">
+                            Portfolio Value
+                            <span class="live-badge">LIVE</span>
+                        </div>
+                        {% if portfolio %}
+                        {% set total_val = pnl_summary.total_value_usd or portfolio.total_value_usd or 0 %}
+                        <div id="metric-total-value" class="wallet-hero-value"
+                            data-animate-value="{{ total_val }}"
+                            data-prefix="$" data-decimals="2">${{ "%.2f"|format(total_val) }}</div>
+                        <div class="wallet-hero-stats">
+                            <span class="hero-stat">
+                                <em>Available</em>
+                                $<span id="metric-available">{{ "%.2f"|format(pnl_summary.available_usd or portfolio.available_usd) }}</span>
+                            </span>
+                            <span class="hero-stat">
+                                <em>Unrealized</em>
+                                <span id="metric-unrealized-pnl" class="{{ 'positive' if pnl_summary.unrealized_pnl_usd and pnl_summary.unrealized_pnl_usd >= 0 else 'negative' if pnl_summary.unrealized_pnl_usd else '' }}">
+                                    {% if pnl_summary and pnl_summary.positions_with_pnl %}{{ "%+.2f"|format(pnl_summary.unrealized_pnl_usd) }}{% else %}—{% endif %}
+                                </span>
+                            </span>
+                            <span class="hero-stat">
+                                <em>Drawdown</em>
+                                <span id="metric-drawdown">{{ "%.2f"|format(portfolio.drawdown_pct) }}%</span>
+                            </span>
+                        </div>
+                        {% else %}
+                        <div class="wallet-hero-value muted-lg">—</div>
+                        <div class="wallet-hero-stats"><span class="hero-stat"><em>No portfolio data</em></span></div>
+                        {% endif %}
+                    </div>
+                    <div class="wallet-hero-side">
+                        <div id="hero-wallet-address" class="wallet-hero-addr mono" data-wallet-address="{{ wallet.wallet_address or '' }}">
+                        {% if wallet.wallet_address %}
+                            <a href="{{ wallet.bscscan_wallet_url or '#' }}" target="_blank" rel="noopener" title="{{ wallet.wallet_address }}">{{ wallet.wallet_address[:10] }}…{{ wallet.wallet_address[-8:] }}</a>
+                        {% else %}
+                            Loading wallet…
+                        {% endif %}
+                        </div>
+                        <div class="hero-chips" id="hero-wallet-links">
+                            <a class="hero-chip" id="hero-link-bscscan" href="{{ wallet.bscscan_wallet_url or '#' }}" target="_blank" rel="noopener" {% if not wallet.bscscan_wallet_url %}hidden{% endif %}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                BscScan
+                            </a>
+                            {% if agent_id %}
+                            <a class="hero-chip hero-chip-accent" href="{{ links.bscscan }}/nft/{{ links.erc8004_registry }}/{{ agent_id }}" target="_blank" rel="noopener" title="ERC-8004 on-chain NFT identity">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                                ERC-8004 #{{ agent_id }}
+                            </a>
+                            <a class="hero-chip" href="{{ links.erc8004_docs }}" target="_blank" rel="noopener" title="EIP-8004 specification">EIP-8004</a>
+                            {% endif %}
+                            <a class="hero-chip" href="{{ links.twak }}" target="_blank" rel="noopener">TWAK</a>
+                            <a class="hero-chip" href="{{ links.hackathon }}" target="_blank" rel="noopener" id="hero-link-compete">Compete</a>
+                            <a class="hero-chip" href="{{ links.cmc_mcp }}" target="_blank" rel="noopener">CMC MCP</a>
+                            <a class="hero-chip" href="/api/audit/export" target="_blank" rel="noopener">Audit</a>
+                            <a class="hero-chip" href="/app/strategy" title="Track 2 Strategy Skill Generator">Track 2 Generator</a>
+                        </div>
+                        <div id="hero-compete-badge" class="hero-compete-badge"></div>
+                    </div>
+                </div>
+                <div class="stats-strip">
+                    <div class="stat-pill">
+                        <span class="stat-pill-label">Daily PnL</span>
+                        {% if portfolio %}
+                        <span class="stat-pill-val {{ 'positive' if portfolio.daily_pnl_usd >= 0 else 'negative' }}">{{ "%+.2f"|format(portfolio.daily_pnl_usd) }}</span>
+                        {% else %}<span class="stat-pill-val">—</span>{% endif %}
+                    </div>
+                    <div class="stat-pill">
+                        <span class="stat-pill-label">Cumulative</span>
+                        {% if portfolio %}
+                        <span class="stat-pill-val {{ 'positive' if portfolio.cumulative_pnl_usd >= 0 else 'negative' }}">{{ "%+.2f"|format(portfolio.cumulative_pnl_usd) }}</span>
+                        {% else %}<span class="stat-pill-val">—</span>{% endif %}
+                    </div>
+                    <div class="stat-pill">
+                        <span class="stat-pill-label">Cost Basis</span>
+                        <span class="stat-pill-val" id="metric-cost-basis">{% if pnl_summary.cost_basis_usd %}${{ "%.2f"|format(pnl_summary.cost_basis_usd) }}{% else %}—{% endif %}</span>
+                    </div>
+                    <div class="stat-pill">
+                        <span class="stat-pill-label">Spot Size</span>
+                        <span class="stat-pill-val">{{ risk.spot_stable_pct }}% stables</span>
+                    </div>
+                    {% if perps_enabled %}
+                    <div class="stat-pill">
+                        <span class="stat-pill-label">Perps</span>
+                        <span class="stat-pill-val">{{ perps_margin_pct }}% × {{ perps_max_leverage }}x</span>
+                    </div>
+                    {% endif %}
+                    <span id="prices-updated-at" class="stat-pill-muted">Loading prices…</span>
+                </div>
+            </div>
+
+            <div class="control-compact glass-card reveal">
+                <div class="control-compact-head">
+                    <span class="control-compact-title">Agent</span>
+                    <span id="agent-status-pill" class="pill pill-live pill-sm" data-state="{{ agent_status.state }}">
+                        <span class="pill-dot"></span>
+                        <span id="agent-status-label">{{ agent_status.state|title }}</span>
+                    </span>
+                </div>
+                <div class="control-compact-grid">
+                    <button id="btn-start" class="ctrl-btn ctrl-start" type="button" title="Start loop ({{ loop_interval // 60 }}m)"{% if not controls_enabled %} disabled{% endif %}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                        <span>Start</span>
+                    </button>
+                    <button id="btn-stop" class="ctrl-btn ctrl-stop" type="button" title="Stop loop"{% if not controls_enabled %} disabled{% endif %}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>
+                        <span>Stop</span>
+                    </button>
+                    <button id="btn-cycle" class="ctrl-btn ctrl-cycle" type="button" title="Run one cycle"{% if not controls_enabled %} disabled{% endif %}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M21 3v5h-5"/></svg>
+                        <span>Cycle</span>
+                    </button>
+                </div>
+                <p id="control-message" class="control-message-compact"></p>
+                <p id="control-viewonly" class="control-viewonly-note"{% if controls_enabled %} hidden{% endif %}>View-only on public URL — open <a href="http://127.0.0.1:8080/app">localhost:8080/app</a> or set <code>DASHBOARD_CONTROLS_ENABLED=true</code> in .env.</p>
+            </div>
+        </section>
+
+        <div class="dashboard-grid">
+            <div class="dashboard-main">
+                <!-- Agent Logic -->
+                <section class="section logic-section reveal">
+                    <div class="section-header">
+                        <h2 class="section-title">
+                            <span class="section-title-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 1 7 7c0 2.5-1.2 4.7-3 6.2V18a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-2.8C6.2 13.7 5 11.5 5 9a7 7 0 0 1 7-7z"/><path d="M9 22h6"/></svg>
+                            </span>
+                            Agent Logic
+                        </h2>
+                        <div class="logic-header-meta">
+                            <span id="logic-cycle" class="section-count">{% if agent_logic.cycle_id %}#{{ agent_logic.cycle_id }}{% else %}—{% endif %}</span>
+                            <span id="logic-mode" class="pill pill-llm-off pill-sm">{{ agent_logic.mode }}</span>
+                        </div>
+                    </div>
+                    <div class="glass-card logic-panel">
+                        <div id="logic-decision" class="logic-decision">
+                            {% if agent_logic.decision %}
+                            <div class="logic-decision-main">
+                                <span class="action-badge {{ (agent_logic.decision.action or 'hold')|lower }}">{{ agent_logic.decision.action }}</span>
+                                <strong>{{ agent_logic.decision.asset or '—' }}</strong>
+                                <span class="logic-confidence">{{ "%.2f"|format(agent_logic.decision.confidence or 0) }}</span>
+                            </div>
+                            <p class="logic-reason">{{ agent_logic.decision.reason or '' }}</p>
+                            {% else %}
+                            <p class="integration-muted">Run a cycle to see reasoning.</p>
+                            {% endif %}
+                        </div>
+                        <div id="logic-cycle-progress" class="logic-cycle-progress">
+                            <div class="logic-cycle-progress-top">
+                                <span id="logic-cycle-phase" class="logic-cycle-phase">Waiting for cycle</span>
+                                <span id="logic-cycle-meta" class="logic-cycle-meta">—</span>
+                            </div>
+                            <div class="logic-cycle-bar-track">
+                                <div id="logic-cycle-bar" class="logic-cycle-bar-fill"></div>
+                            </div>
+                            <p id="logic-scanning-label" class="logic-scanning-label">Run a cycle to see live per-token signals.</p>
+                        </div>
+                        <div class="logic-toolbar">
+                            <input id="logic-search" type="search" placeholder="Search tokens…" class="logic-search" autocomplete="off">
+                            <div class="logic-stats-row">
+                                <span class="logic-stat-chip">Total <strong id="logic-stat-all">{{ agent_logic.stats.total }}</strong></span>
+                                <span class="logic-stat-chip bullish">↑ <strong id="logic-stat-bullish">{{ agent_logic.stats.bullish }}</strong></span>
+                                <span class="logic-stat-chip neutral">○ <strong id="logic-stat-neutral">{{ agent_logic.stats.neutral }}</strong></span>
+                                <span class="logic-stat-chip bearish">↓ <strong id="logic-stat-bearish">{{ agent_logic.stats.bearish }}</strong></span>
+                            </div>
+                        </div>
+                        <div id="logic-feed" class="logic-feed-grid">
+                            <div class="logic-feed-col bullish">
+                                <div class="logic-feed-head">
+                                    <span class="logic-feed-title">↑ Bullish</span>
+                                    <span id="logic-col-count-bullish" class="logic-feed-count">{{ agent_logic.stats.bullish }}</span>
+                                </div>
+                                <div id="logic-col-bullish" class="logic-feed-list">
+                                    {% for t in agent_logic.categories.bullish %}
+                                    {{ logic_token_card(t) }}
+                                    {% else %}
+                                    <p class="integration-muted logic-empty">No bullish signals yet</p>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="logic-feed-col neutral">
+                                <div class="logic-feed-head">
+                                    <span class="logic-feed-title">○ Neutral</span>
+                                    <span id="logic-col-count-neutral" class="logic-feed-count">{{ agent_logic.stats.neutral }}</span>
+                                </div>
+                                <div id="logic-col-neutral" class="logic-feed-list">
+                                    {% for t in agent_logic.categories.neutral %}
+                                    {{ logic_token_card(t) }}
+                                    {% else %}
+                                    <p class="integration-muted logic-empty">No neutral signals yet</p>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="logic-feed-col bearish">
+                                <div class="logic-feed-head">
+                                    <span class="logic-feed-title">↓ Bearish</span>
+                                    <span id="logic-col-count-bearish" class="logic-feed-count">{{ agent_logic.stats.bearish }}</span>
+                                </div>
+                                <div id="logic-col-bearish" class="logic-feed-list">
+                                    {% for t in agent_logic.categories.bearish %}
+                                    {{ logic_token_card(t) }}
+                                    {% else %}
+                                    <p class="integration-muted logic-empty">No bearish signals yet</p>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                        <p id="logic-updated" class="logic-footer">{% if agent_logic.timestamp %}{{ agent_logic.timestamp[:19]|replace('T', ' ') }} UTC{% endif %}</p>
+                    </div>
+                </section>
+
+                <!-- Holdings -->
+                <section class="section reveal">
+                    <div class="section-header">
+                        <h2 class="section-title">
+                            <span class="section-title-icon">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
+                            </span>
+                            Holdings
+                        </h2>
+                        {% if holdings %}<span class="section-count">{{ holdings|length }} tokens</span>{% endif %}
+                    </div>
+                    <div class="glass-card">
+                        {% if holdings %}
+                        <div class="table-wrap table-compact">
+                            <table id="holdings-table">
+                                <thead>
+                                    <tr>
+                                        <th>Token</th>
+                                        <th>Bal</th>
+                                        <th>Price</th>
+                                        <th>Value</th>
+                                        <th>PnL</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="holdings-tbody">
+                                    {% for h in holdings %}
+                                    <tr data-symbol="{{ h.symbol }}">
+                                        <td>
+                                            <div class="token-cell">
+                                                <span class="token-avatar">{{ h.symbol[:2] }}</span>
+                                                <span class="token-name">{{ h.symbol }}</span>
+                                            </div>
+                                        </td>
+                                        <td class="cell-amount">{{ "%.4f"|format(h.amount) if h.amount >= 1 else "%.6f"|format(h.amount) }}</td>
+                                        <td class="cell-price mono">{% if h.current_price %}${{ "%.4f"|format(h.current_price) if h.current_price >= 0.01 else "%.8f"|format(h.current_price) }}{% else %}—{% endif %}</td>
+                                        <td class="cell-value">${{ "%.2f"|format(h.value_usd) }}</td>
+                                        <td class="cell-pnl-pct {{ 'positive' if h.pnl_pct and h.pnl_pct >= 0 else 'negative' if h.pnl_pct else '' }}">{% if h.pnl_pct is not none %}{{ "%+.1f"|format(h.pnl_pct) }}%{% else %}—{% endif %}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <div class="empty"><p>No holdings</p></div>
+                        {% endif %}
+                    </div>
+                </section>
+
+                <!-- Recent decisions + swaps (main feed) -->
+                <div class="activity-dual reveal">
+                    <section class="section">
+                        <div class="section-header">
+                            <h2 class="section-title">
+                                <span class="section-title-icon">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                                </span>
+                                Recent Decisions
+                            </h2>
+                            <span class="section-count" id="decisions-count">{{ decisions|length }}</span>
+                        </div>
+                        <div class="glass-card activity-card">
+                            <div id="decisions-panel" class="activity-panel">
+                                {% if decisions %}
+                                <ul class="activity-list" id="decisions-list">
+                                    {% for d in decisions %}
+                                    <li class="activity-row">
+                                        <div class="activity-row-top">
+                                            <span class="action-badge {{ d.action }} sm">{{ d.action|upper }}</span>
+                                            <strong class="activity-asset">{{ d.asset }}</strong>
+                                            <span class="activity-meta">#{{ d.cycle_id }}</span>
+                                            {% if d.confidence is not none %}
+                                            <span class="activity-conf mono">{{ "%.0f"|format(d.confidence * 100) }}%</span>
+                                            {% endif %}
+                                            <span class="activity-row-end">
+                                                <span class="activity-time">{{ d.time_short }}</span>
+                                            </span>
+                                        </div>
+                                        {% if d.reason_short %}
+                                        <p class="activity-reason">{{ d.reason_short }}</p>
+                                        {% endif %}
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                                {% else %}
+                                <p class="integration-muted activity-empty">No decisions yet — run a cycle to populate the audit trail.</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="section">
+                        <div class="section-header">
+                            <h2 class="section-title">
+                                <span class="section-title-icon">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17L17 7"/><path d="M7 7h10v10"/></svg>
+                                </span>
+                                Recent Swaps &amp; Trades
+                            </h2>
+                            <span class="section-count" id="trades-count">{{ trades|length }}</span>
+                        </div>
+                        <div class="glass-card activity-card">
+                            <div id="trades-panel" class="activity-panel">
+                                {% if trades %}
+                                <ul class="activity-list" id="trades-list">
+                                    {% for t in trades %}
+                                    <li class="activity-row">
+                                        <div class="activity-row-top">
+                                            <span class="action-badge {{ t.side_lower }} sm">{{ t.side }}</span>
+                                            <strong class="activity-asset">{{ t.asset }}</strong>
+                                            <span class="activity-meta">${{ "%.2f"|format(t.amount_usd or 0) }}</span>
+                                            {% if t.status %}<span class="activity-status">{{ t.status }}</span>{% endif %}
+                                            <span class="activity-row-end">
+                                                <span class="activity-time">{{ t.time_short }}</span>
+                                                {% if t.bscscan_url %}
+                                                <a class="tx-link tx-link-prominent" href="{{ t.bscscan_url }}" target="_blank" rel="noopener" title="View on BscScan">
+                                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                                                    BscScan
+                                                </a>
+                                                {% else %}
+                                                <span class="activity-meta muted">no tx</span>
+                                                {% endif %}
+                                            </span>
+                                        </div>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                                {% else %}
+                                <p class="integration-muted activity-empty">No swaps yet — trades appear here after execution.</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <aside class="dashboard-sidebar reveal">
+                <!-- Risk -->
+                <section class="section section-compact">
+                    <h2 class="sidebar-title">Risk</h2>
+                    <div class="glass-card sidebar-card">
+                        <div class="mini-grid">
+                            <div class="mini-item"><span>Drawdown</span><strong>{{ risk.max_drawdown_pct }}%</strong></div>
+                            <div class="mini-item"><span>Slippage</span><strong>{{ risk.max_slippage_bps }} bps</strong></div>
+                            <div class="mini-item"><span>Positions</span><strong>{{ risk.max_open_positions }}</strong></div>
+                            <div class="mini-item"><span>Cooldown</span><strong>{{ risk.cooldown_minutes }}m</strong></div>
+                            <div class="mini-item"><span>Confidence</span><strong>{{ risk.min_confidence }}</strong></div>
+                            <div class="mini-item"><span>Spot</span><strong>{{ risk.spot_stable_pct }}%</strong></div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Quick stats -->
+                <section class="section section-compact">
+                    <h2 class="sidebar-title">Activity</h2>
+                    <div class="glass-card sidebar-card">
+                        <div class="mini-grid">
+                            <div class="mini-item"><span>Decisions</span><strong>{{ decisions|length }}</strong></div>
+                            <div class="mini-item"><span>Trades</span><strong>{{ trades|length }}</strong></div>
+                            <div class="mini-item"><span>With TX</span><strong>{{ trades|selectattr('tx_hash')|list|length }}</strong></div>
+                            <div class="mini-item"><span>Audits</span><strong>{{ audits|length }}</strong></div>
+                        </div>
+                    </div>
+                </section>
+            </aside>
+        </div>
+
+        <footer class="footer">
+            Genesis · {{ network }} · Auto-refresh 90s
+        </footer>
+    </div>
+
+    <div id="token-detail-modal" class="token-detail-modal" aria-hidden="true" role="dialog" aria-labelledby="token-modal-title">
+        <div class="token-modal-backdrop"></div>
+        <div class="token-modal-panel">
+            <header class="token-modal-header">
+                <div class="token-modal-head-left">
+                    <h3 id="token-modal-title" class="token-modal-symbol">—</h3>
+                    <span id="token-modal-direction" class="token-modal-direction">—</span>
+                </div>
+                <button type="button" class="token-modal-close" aria-label="Close">&times;</button>
+            </header>
+            <div class="token-modal-metrics" id="token-modal-metrics"></div>
+            <div class="token-modal-section">
+                <h4 class="token-modal-section-title">Signal components</h4>
+                <div id="token-modal-bars" class="logic-bars"></div>
+            </div>
+            <div class="token-modal-section">
+                <h4 class="token-modal-section-title">Why this rating</h4>
+                <ul id="token-modal-logic" class="token-modal-logic"></ul>
+            </div>
+            <div class="token-modal-section">
+                <h4 class="token-modal-section-title">Raw signals</h4>
+                <div id="token-modal-signals" class="logic-signals"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js?v={{ asset_version }}"></script>
+</body>
+</html>
