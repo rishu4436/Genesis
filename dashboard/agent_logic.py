@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from dashboard.holdings import _format_decision_price_line
 from genesis.core.config import RulesConfig
 from genesis.core.models import SignalCategory
 
@@ -434,6 +435,22 @@ def _token_row(
     )
 
 
+def _decision_panel_row(decision: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "action": decision.get("action"),
+        "asset": decision.get("asset"),
+        "confidence": decision.get("confidence"),
+        "size_usd": decision.get("size_usd"),
+        "reason": decision.get("reason"),
+        "signals_used": decision.get("signals_used") or [],
+        "current_price_usd": decision.get("current_price_usd"),
+        "take_profit_pct": decision.get("take_profit_pct"),
+        "take_profit_price_usd": decision.get("take_profit_price_usd"),
+        "exit_trigger": decision.get("exit_trigger"),
+        "price_line": _format_decision_price_line(decision),
+    }
+
+
 def build_logic_view(
     audit: dict[str, Any] | None,
     rules: RulesConfig,
@@ -450,6 +467,7 @@ def build_logic_view(
         "thresholds": {
             "buy_conviction_min": rules.signals.buy_conviction_min,
             "sell_conviction_max": rules.signals.sell_conviction_max,
+            "take_profit_pct": rules.exit.take_profit_pct,
         },
         "decision": None,
         "risk": None,
@@ -503,14 +521,7 @@ def build_logic_view(
         "mode": "llm" if llm_enabled else "rule-based",
         "thresholds": empty["thresholds"],
         "categories": categories,
-        "decision": {
-            "action": decision.get("action"),
-            "asset": decision.get("asset"),
-            "confidence": decision.get("confidence"),
-            "size_usd": decision.get("size_usd"),
-            "reason": decision.get("reason"),
-            "signals_used": decision.get("signals_used") or [],
-        }
+        "decision": _decision_panel_row(decision)
         if decision
         else None,
         "risk": risk,

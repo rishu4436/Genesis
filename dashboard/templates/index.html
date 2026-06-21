@@ -233,7 +233,11 @@
                             <div class="logic-decision-main">
                                 <span class="action-badge {{ (agent_logic.decision.action or 'hold')|lower }}">{{ agent_logic.decision.action }}</span>
                                 <strong>{{ agent_logic.decision.asset or '—' }}</strong>
+                                {% if agent_logic.decision.price_line %}
+                                <span class="logic-price mono">{{ agent_logic.decision.price_line }}</span>
+                                {% else %}
                                 <span class="logic-confidence">{{ "%.2f"|format(agent_logic.decision.confidence or 0) }}</span>
+                                {% endif %}
                             </div>
                             <p class="logic-reason">{{ agent_logic.decision.reason or '' }}</p>
                             {% else %}
@@ -374,7 +378,9 @@
                                             <span class="action-badge {{ d.action }} sm">{{ d.action|upper }}</span>
                                             <strong class="activity-asset">{{ d.asset }}</strong>
                                             <span class="activity-meta">#{{ d.cycle_id }}</span>
-                                            {% if d.confidence is not none %}
+                                            {% if d.price_line %}
+                                            <span class="activity-price mono">{{ d.price_line }}</span>
+                                            {% elif d.confidence is not none %}
                                             <span class="activity-conf mono">{{ "%.0f"|format(d.confidence * 100) }}%</span>
                                             {% endif %}
                                             <span class="activity-row-end">

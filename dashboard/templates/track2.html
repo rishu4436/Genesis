@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ agent_name }} — Strategy Skill Generator</title>
+    <title>{{ agent_name }} — Strategy Skills</title>
     <link rel="icon" href="/favicon.ico" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&family=Outfit:wght@700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/dashboard.css?v={{ asset_version }}">
 </head>
-<body class="dashboard-app track2-app">
+<body class="dashboard-app track2-app" data-agent-name="{{ agent_name }}">
     <div class="bg-canvas" aria-hidden="true">
         <div class="bg-aurora bg-aurora-1"></div>
         <div class="bg-aurora bg-aurora-2"></div>
@@ -55,98 +55,60 @@
 
         <section class="track2-hero glass-card">
             <div class="track2-hero-text">
-                <h1>Strategy Skill Generator</h1>
-                <p>Turn CMC market conditions into a <strong>complete, backtestable</strong> trading strategy JSON. Same signal fusion as the live agent — without executing trades.</p>
-            </div>
-            <div class="track2-hero-actions">
-                <button type="button" id="btn-generate" class="btn btn-primary">Generate Strategy</button>
-                <button type="button" id="btn-copy" class="btn btn-ghost" disabled>Copy JSON</button>
-                <a id="btn-download" class="btn btn-ghost" href="#" download>Download</a>
+                <h1>Strategy Skills</h1>
+                <p>Talk to <strong>{{ agent_name }}</strong>. Ask about the market or describe a strategy in your own words — live CMC data, backtestable JSON output. No trades executed.</p>
             </div>
         </section>
 
-        <div class="track2-layout">
-            <aside class="track2-form glass-card">
-                <h2 class="section-title">Market Conditions</h2>
-                <form id="strategy-form" class="track2-fields">
-                    <label class="field">
-                        <span class="field-label">Primary Asset</span>
-                        <input type="text" name="primary_asset" value="{{ default_asset }}" placeholder="BNB" class="field-input" autocomplete="off">
-                    </label>
-                    <label class="field">
-                        <span class="field-label">Timeframe</span>
-                        <select name="timeframe" class="field-input">
-                            <option value="1m">1m</option>
-                            <option value="5m" selected>5m</option>
-                            <option value="15m">15m</option>
-                            <option value="1h">1h</option>
-                            <option value="4h">4h</option>
-                            <option value="1d">1d</option>
-                        </select>
-                    </label>
-                    <label class="field">
-                        <span class="field-label">Risk Profile</span>
-                        <select name="risk_profile" class="field-input">
-                            <option value="conservative" selected>Conservative</option>
-                            <option value="moderate">Moderate</option>
-                            <option value="aggressive">Aggressive</option>
-                        </select>
-                    </label>
-                    <label class="field">
-                        <span class="field-label">Market Regime</span>
-                        <select name="market_regime" class="field-input">
-                            <option value="bullish" selected>Bullish</option>
-                            <option value="bearish">Bearish</option>
-                            <option value="neutral">Neutral</option>
-                            <option value="volatile">Volatile</option>
-                        </select>
-                    </label>
-                    <div class="field-row">
-                        <label class="field">
-                            <span class="field-label">Take Profit %</span>
-                            <input type="number" name="take_profit_pct" value="12" min="1" max="100" step="0.5" class="field-input">
-                        </label>
-                        <label class="field">
-                            <span class="field-label">Stop Loss %</span>
-                            <input type="number" name="stop_loss_pct" value="6" min="0.5" max="50" step="0.5" class="field-input">
-                        </label>
-                    </div>
-                    <label class="field">
-                        <span class="field-label">Backtest Audits</span>
-                        <input type="number" name="backtest_limit" value="50" min="1" max="200" class="field-input">
-                    </label>
-                    <label class="field">
-                        <span class="field-label">Simulate Idle Cycles (adaptive)</span>
-                        <input type="number" name="idle_cycles" value="0" min="0" max="100" class="field-input">
-                    </label>
-                </form>
-            </aside>
+        <section class="track2-chat glass-card" id="chat-panel">
+            <div class="track2-chat-header">
+                <h2 class="section-title">Chat with {{ agent_name }}</h2>
+                <span class="track2-chat-badge" id="assistant-status">
+                    {% if assistant_ready and cmc_configured %}Live · CMC{% elif assistant_ready %}Live{% else %}Offline{% endif %}
+                </span>
+            </div>
+            <div class="track2-chat-log" id="chat-log" aria-live="polite"></div>
+            <div class="track2-quick-prompts" id="quick-prompts">
+                <button type="button" class="track2-chip" data-prompt="What's happening in the market today? Give me fear/greed and top movers.">Explore the market</button>
+                <button type="button" class="track2-chip" data-prompt="Build me a conservative BNB strategy with 12% take profit and 6% stop loss.">Generate a strategy</button>
+                <button type="button" class="track2-chip" data-prompt="What's CAKE doing right now? Price, 24h change, and technicals.">Check an asset</button>
+            </div>
+            <form id="chat-form" class="track2-chat-input">
+                <textarea id="chat-message" name="message" rows="2" class="field-input track2-chat-textarea" placeholder="Ask about the market or describe your strategy…" autocomplete="off"></textarea>
+                <div class="track2-chat-actions">
+                    <button type="submit" id="btn-chat-send" class="btn btn-primary">Send</button>
+                    <button type="button" id="btn-chat-clear" class="btn btn-ghost">New conversation</button>
+                </div>
+            </form>
+        </section>
 
-            <main class="track2-output">
-                <div class="track2-summary glass-card" id="strategy-summary">
-                    <h2 class="section-title">Strategy Summary</h2>
-                    <p class="track2-placeholder" id="summary-placeholder">Configure conditions and click <em>Generate Strategy</em> to preview entry/exit rules, indicators, and risk envelope.</p>
-                    <div id="summary-content" hidden>
-                        <p id="summary-nl" class="summary-nl"></p>
-                        <div class="summary-grid" id="summary-grid"></div>
+        <div class="track2-results" id="strategy-results" hidden>
+            <div class="track2-summary glass-card" id="strategy-summary">
+                <h2 class="section-title">Your Strategy</h2>
+                <div id="summary-content">
+                    <p id="summary-nl" class="summary-nl"></p>
+                    <div class="summary-grid" id="summary-grid"></div>
+                </div>
+            </div>
+
+            <div class="track2-backtest glass-card" id="backtest-panel">
+                <h2 class="section-title">Backtest Preview</h2>
+                <div class="backtest-metrics" id="backtest-metrics">
+                    <span class="track2-placeholder">Replay against stored agent cycles.</span>
+                </div>
+            </div>
+
+            <div class="track2-json glass-card">
+                <div class="track2-json-header">
+                    <h2 class="section-title">Strategy JSON</h2>
+                    <div class="track2-json-actions">
+                        <button type="button" id="btn-copy" class="btn btn-ghost btn-sm" disabled>Copy JSON</button>
+                        <a id="btn-download" class="btn btn-primary btn-sm" href="#" download hidden>Download .json</a>
                     </div>
                 </div>
-
-                <div class="track2-backtest glass-card" id="backtest-panel">
-                    <h2 class="section-title">Backtest Preview</h2>
-                    <div class="backtest-metrics" id="backtest-metrics">
-                        <span class="track2-placeholder">Runs audit replay against stored agent cycles.</span>
-                    </div>
-                </div>
-
-                <div class="track2-json glass-card">
-                    <div class="track2-json-header">
-                        <h2 class="section-title">Strategy JSON</h2>
-                        <span class="mono track2-json-hint">Machine-readable · backtestable</span>
-                    </div>
-                    <pre id="strategy-json" class="track2-json-pre"><code class="track2-placeholder">// Generated strategy appears here</code></pre>
-                </div>
-            </main>
+                <p class="track2-file-hint" id="file-hint" hidden></p>
+                <pre id="strategy-json" class="track2-json-pre"><code class="track2-placeholder">// Strategy JSON appears here after generation</code></pre>
+            </div>
         </div>
     </div>
 

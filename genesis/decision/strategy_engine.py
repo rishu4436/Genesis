@@ -16,6 +16,7 @@ from genesis.decision.adaptive_mode import (
     is_aggressive_mode,
     pick_force_buy_candidate,
 )
+from genesis.decision.exit_rules import annotate_buy_decision, find_take_profit_candidate
 from genesis.decision.candidate_selection import is_buy_eligible, pick_best_buy_candidate
 from genesis.decision.llm_prompts import build_system_prompt, build_user_prompt
 from genesis.decision.risk_manager import RiskManager
@@ -140,6 +141,7 @@ class StrategyEngine:
         aggressive = is_aggressive_mode(self.rules, idle_swap_cycles)
         buy_gate = buy_params_for_idle(self.rules, idle_swap_cycles)
         held = {p.symbol.upper(): p for p in portfolio.positions}
+        trade_size = self._trade_size_usd(portfolio)
 
         if aggressive:
             logger.info(
@@ -147,22 +149,28 @@ class StrategyEngine:
                 f"without swap — buy_conviction_min={buy_gate.buy_conviction_min:.2f}"
             )
 
-        for composite in composites:
-            sym = composite.symbol.upper()
-            if sym in held and composite.conviction <= thresholds.sell_conviction_max:
-                position_value = getattr(held[sym], "value_usd", None) or self._trade_size_usd(portfolio)
-                return Decision(
-                    action=Action.SELL,
-                    asset=composite.symbol,
-                    size_usd=min(self._trade_size_usd(portfolio), position_value),
-                    reason=(
-                        f"Rule-based SELL: {composite.symbol} "
-                        f"conviction={composite.conviction:.2f}"
-                    ),
-                    confidence=max(1.0 - composite.conviction, self.rules.risk.min_confidence),
-                    risk_notes="Rule engine",
-                    signals_used=list(composite.components.keys()),
-                )
+        tp_sell = find_take_profit_candidate(composites, portfolio, self.rules, trade_size)
+        if tp_sell:
+            return tp_sell
+
+        if not self.rules.exit.prefer_take_profit_over_conviction:
+            for composite in composites:
+                sym = composite.symbol.upper()
+                if sym in held and composite.conviction <= thresholds.sell_conviction_max:
+                    position_value = getattr(held[sym], "value_usd", None) or trade_size
+                    return Decision(
+                        action=Action.SELL,
+                        asset=composite.symbol,
+                        size_usd=min(trade_size, position_value),
+                        reason=(
+                            f"Rule-based SELL: {composite.symbol} "
+                            f"conviction={composite.conviction:.2f}"
+                        ),
+                        confidence=max(1.0 - composite.conviction, self.rules.risk.min_confidence),
+                        risk_notes="Rule engine",
+                        signals_used=list(composite.components.keys()),
+                        exit_trigger="conviction",
+                    )
 
         buy_candidates = [
             c
@@ -203,10 +211,10 @@ class StrategyEngine:
                 if aggressive
                 else ""
             )
-            return Decision(
+            buy = Decision(
                 action=Action.BUY,
                 asset=best.symbol,
-                size_usd=self._trade_size_usd(portfolio),
+                size_usd=trade_size,
                 reason=(
                     f"Rule-based BUY: {best.symbol} "
                     f"conviction={best.conviction:.2f} ({best.direction})"
@@ -218,6 +226,7 @@ class StrategyEngine:
                 risk_notes="Rule engine",
                 signals_used=list(best.components.keys()),
             )
+            return annotate_buy_decision(buy, best, self.rules)
 
         best = max(composites, key=lambda c: c.conviction)
         return Decision(
@@ -231,6 +240,21 @@ class StrategyEngine:
             risk_notes="Rule engine",
             signals_used=list(best.components.keys()),
         )
+
+    def attach_exit_metadata(
+        self,
+        decision: Decision,
+        composites: list[CompositeSignal],
+        portfolio: PortfolioSnapshot,
+    ) -> Decision:
+        """Enrich BUY decisions with spot price and take-profit target for the audit log."""
+        if decision.action != Action.BUY:
+            return decision
+        composite = next(
+            (c for c in composites if c.symbol.upper() == decision.asset.upper()),
+            None,
+        )
+        return annotate_buy_decision(decision, composite, self.rules)
 
     def rule_based_fallback(
         self,

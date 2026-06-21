@@ -27,6 +27,40 @@ def _parse_rank(raw: Any) -> int:
     return rank if rank > 0 else 0
 
 
+def _change_24h_from_signals(signals: list[Signal]) -> float | None:
+    """24h percent change from CMC quote signal."""
+    for signal in signals:
+        if signal.category != SignalCategory.QUOTE:
+            continue
+        raw = signal.raw_data or {}
+        for key in ("percent_change_24h", "percentChange24h"):
+            if key not in raw:
+                continue
+            try:
+                return float(raw[key])
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
+def _price_usd_from_signals(signals: list[Signal]) -> float | None:
+    """Latest USD spot price from CMC quote signal raw_data."""
+    for signal in signals:
+        if signal.category != SignalCategory.QUOTE:
+            continue
+        raw = signal.raw_data or {}
+        price_raw = raw.get("price")
+        if price_raw is None:
+            continue
+        try:
+            price = float(price_raw)
+        except (TypeError, ValueError):
+            continue
+        if price > 0:
+            return price
+    return None
+
+
 def _extract_cmc_rank(data: Any) -> int:
     if isinstance(data, list):
         for row in data:
@@ -151,6 +185,8 @@ class SignalAggregator:
                 direction = "neutral"
 
         cmc_rank, market_cap_usd = _market_metrics_from_signals(signals)
+        price_usd = _price_usd_from_signals(signals)
+        change_24h_pct = _change_24h_from_signals(signals)
         alignment_probe = CompositeSignal(
             symbol=symbol,
             conviction=conviction,
@@ -165,6 +201,8 @@ class SignalAggregator:
             "news_supportive": components.get("news", 0.5) > 0.55,
             "cmc_rank": cmc_rank,
             "market_cap_usd": market_cap_usd,
+            "price_usd": price_usd,
+            "change_24h_pct": change_24h_pct,
             "buy_alignment": buy_alignment_score(alignment_probe),
         }
 

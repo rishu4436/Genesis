@@ -2,11 +2,20 @@
 # Edit this file to tune trading behavior. All hard limits are enforced by RiskManager.
 
 strategy:
-  name: conservative_momentum_sentiment
+  name: dca_dip
   description: >
-    Buy when technicals bullish + sentiment positive + funding neutral +
-    on-chain accumulation + news supportive, within strict risk budget.
+    Top-100 CMC dip DCA: first buy on -20% 24h drop, ladder buys every -10% price
+    step until USDT depleted, exit at +20% average-entry profit.
   prompt_template: default  # References llm_prompts.py template key
+
+# DCA dip-buy (set enabled: false + strategy.name: conservative_momentum_sentiment to revert)
+dca_dip:
+  enabled: true
+  max_cmc_rank: 100
+  trigger_drop_24h_pct: 20.0    # First buy when 24h change <= -20%
+  step_drop_pct: 10.0             # Each additional buy when price falls 10% from last buy
+  take_profit_pct: 20.0           # Sell entire DCA position at +20% from avg entry
+  max_concurrent_positions: 3
 
 # Loop & timing
 loop:
@@ -315,6 +324,11 @@ execution:
   gas_buffer_pct: 10
   retry_attempts: 3
   retry_delay_seconds: 5
+
+# Spot exits — sell when price gains take_profit_pct from entry (not conviction)
+exit:
+  take_profit_pct: 10.0
+  prefer_take_profit_over_conviction: true
 
 # PancakeSwap Perps (ApolloX Diamond) — 4% USDT/USDC margin × max 5x leverage
 # Only symbols in BOTH allowed_symbols AND allowlist above are eligible for perps

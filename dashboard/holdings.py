@@ -281,6 +281,31 @@ def _format_time_short(ts: str | None) -> str:
     return str(ts)[:16].replace("T", " ")
 
 
+def _format_decision_price_line(decision: dict) -> str | None:
+    """Compact price / take-profit line for decision feed."""
+    action = str(decision.get("action") or "").upper()
+    price = decision.get("current_price_usd")
+    tp_price = decision.get("take_profit_price_usd")
+    tp_pct = decision.get("take_profit_pct")
+    change = decision.get("change_24h_pct")
+    dca_step = decision.get("dca_step")
+    if action == "BUY" and price:
+        parts = [f"${float(price):.4f}"]
+        if change is not None:
+            parts.append(f"24h {float(change):+.1f}%")
+        if dca_step:
+            parts.append(f"DCA #{int(dca_step)}")
+        if tp_price and tp_pct is not None:
+            parts.append(f"TP +{float(tp_pct):.0f}% @ ${float(tp_price):.4f}")
+        return " · ".join(parts)
+    if action == "SELL" and decision.get("exit_trigger") in {"take_profit", "dca_take_profit"}:
+        if price and tp_pct is not None:
+            return f"TP +{float(tp_pct):.0f}% hit @ ${float(price):.4f}"
+        if tp_pct is not None:
+            return f"Take-profit +{float(tp_pct):.0f}%"
+    return None
+
+
 def enrich_audit_row(audit: dict) -> dict:
     """Add display helpers for decision feed rows."""
     row = dict(audit)
@@ -290,8 +315,13 @@ def enrich_audit_row(audit: dict) -> dict:
     row["action"] = action
     row["asset"] = decision.get("asset") or "—"
     row["confidence"] = decision.get("confidence")
+    row["current_price_usd"] = decision.get("current_price_usd")
+    row["take_profit_pct"] = decision.get("take_profit_pct")
+    row["take_profit_price_usd"] = decision.get("take_profit_price_usd")
+    row["exit_trigger"] = decision.get("exit_trigger")
+    row["price_line"] = _format_decision_price_line(decision)
     row["reason"] = reason
-    row["reason_short"] = (reason[:96] + "…") if len(reason) > 96 else reason
+    row["reason_short"] = (reason[:120] + "…") if len(reason) > 120 else reason
     row["time_short"] = _format_time_short(audit.get("timestamp"))
     row["cycle_id"] = audit.get("cycle_id")
     return row

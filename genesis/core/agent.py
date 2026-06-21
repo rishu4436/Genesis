@@ -26,6 +26,11 @@ from genesis.data.price_resolver import PriceResolver
 from genesis.data.signal_aggregator import SignalAggregator
 from genesis.decision.risk_manager import RiskManager
 from genesis.decision.adaptive_mode import count_consecutive_idle_swap_cycles
+from genesis.decision.dca_dip import (
+    compute_dca_state_after_buy,
+    dca_dip_active,
+    decide_dca_dip,
+)
 from genesis.decision.strategy_engine import StrategyEngine
 from genesis.decision.trade_sizing import (
     perps_margin_usd,
@@ -242,29 +247,43 @@ class GenesisAgent:
         recent_audits = await self.db.get_recent_audits(50)
         idle_swap_cycles = count_consecutive_idle_swap_cycles(recent_audits)
 
-        use_rules_only = demo and self.rules.loop.demo.rule_based_only
-        if portfolio:
-            if use_rules_only:
+        from genesis.core.models import PortfolioSnapshot
+
+        portfolio_for_decision = portfolio or PortfolioSnapshot(
+            total_value_usd=0.0, available_usd=0.0
+        )
+
+        if dca_dip_active(self.rules):
+            dca_states = await self.db.get_dca_states()
+            decision = decide_dca_dip(
+                composites,
+                portfolio_for_decision,
+                self.rules,
+                dca_states,
+            )
+        else:
+            use_rules_only = demo and self.rules.loop.demo.rule_based_only
+            if portfolio:
+                if use_rules_only:
+                    decision = self.strategy.decide_rule_based(
+                        composites,
+                        portfolio,
+                        idle_swap_cycles=idle_swap_cycles,
+                    )
+                else:
+                    decision = await self.strategy.decide(
+                        composites,
+                        portfolio,
+                        idle_swap_cycles=idle_swap_cycles,
+                    )
+            else:
                 decision = self.strategy.decide_rule_based(
                     composites,
-                    portfolio,
+                    portfolio_for_decision,
                     idle_swap_cycles=idle_swap_cycles,
                 )
-            else:
-                decision = await self.strategy.decide(
-                    composites,
-                    portfolio,
-                    idle_swap_cycles=idle_swap_cycles,
-                )
-        else:
-            from genesis.core.models import PortfolioSnapshot
-
-            decision = self.strategy.decide_rule_based(
-                composites,
-                PortfolioSnapshot(total_value_usd=0.0, available_usd=0.0),
-                idle_swap_cycles=idle_swap_cycles,
-            )
-
+            if portfolio:
+                decision = self.strategy.attach_exit_metadata(decision, composites, portfolio)
         audit.decision = decision
         audit.composite = next(
             (c for c in composites if c.symbol.upper() == decision.asset.upper()),
@@ -410,6 +429,8 @@ class GenesisAgent:
             elif trade.simulated:
                 logger.info(f"Simulated trade: {trade.symbol} ${trade.amount_usd:.2f}")
 
+            await self._sync_dca_state_after_trade(decision, audit.trade)
+
         except Exception as e:
             logger.error(f"Execution failed: {format_swap_error(e)}")
             from genesis.core.models import Trade
@@ -502,6 +523,39 @@ class GenesisAgent:
             await asyncio.gather(*[_bounded(t) for t in scan_list])
 
         return composites, all_token_signals
+
+    async def _sync_dca_state_after_trade(self, decision: Decision, trade: Any) -> None:
+        """Persist DCA ladder after confirmed buys; clear on take-profit sells."""
+        if decision.strategy_mode != "dca_dip" or trade is None:
+            return
+        status = getattr(trade, "status", None)
+        status_val = status.value if hasattr(status, "value") else str(status or "")
+        if status_val.lower() not in {"confirmed", "submitted", "simulated"}:
+            return
+        if decision.action == Action.SELL and decision.exit_trigger == "dca_take_profit":
+            await self.db.clear_dca_state(decision.asset)
+            logger.info(f"DCA ladder closed for {decision.asset} (take-profit)")
+            return
+        if decision.action != Action.BUY:
+            return
+        price = getattr(trade, "price", None) or decision.current_price_usd
+        if not price or float(price) <= 0:
+            return
+        states = await self.db.get_dca_states()
+        sym = decision.asset.upper()
+        updated = compute_dca_state_after_buy(
+            states.get(sym),
+            symbol=decision.asset,
+            buy_price=float(price),
+            buy_usd=float(getattr(trade, "amount_usd", 0) or decision.size_usd or 0),
+            change_24h_pct=decision.change_24h_pct,
+            dca_step=decision.dca_step or 1,
+        )
+        await self.db.upsert_dca_state(updated)
+        logger.info(
+            f"DCA ladder updated {decision.asset}: "
+            f"step={updated.buy_count} avg=${updated.avg_entry_price_usd:.4f}"
+        )
 
     def stop(self) -> None:
         """Signal the agent loop to stop."""

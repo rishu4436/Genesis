@@ -600,9 +600,11 @@
     }
 
     function renderDecisionRow(d) {
-        const conf = d.confidence != null
-            ? '<span class="activity-conf mono">' + Math.round(d.confidence * 100) + '%</span>'
-            : '';
+        const priceOrConf = d.price_line
+            ? '<span class="activity-price mono">' + escapeHtml(d.price_line) + '</span>'
+            : (d.confidence != null
+                ? '<span class="activity-conf mono">' + Math.round(d.confidence * 100) + '%</span>'
+                : '');
         const reason = d.reason_short
             ? '<p class="activity-reason">' + escapeHtml(d.reason_short) + '</p>'
             : '';
@@ -613,7 +615,7 @@
             escapeHtml((d.action || 'hold').toUpperCase()) + '</span>' +
             '<strong class="activity-asset">' + escapeHtml(d.asset || '—') + '</strong>' +
             '<span class="activity-meta">#' + escapeHtml(String(d.cycle_id || '—')) + '</span>' +
-            conf +
+            priceOrConf +
             '<span class="activity-row-end"><span class="activity-time">' +
             escapeHtml(d.time_short || '—') + '</span></span>' +
             '</div>' + reason + '</li>'
@@ -849,11 +851,14 @@
             if (feed.decision && feed.decision.action && !feed.active) {
                 const d = feed.decision;
                 const action = (d.action || 'hold').toLowerCase();
+                const priceOrConf = d.price_line
+                    ? '<span class="logic-price mono">' + escapeHtml(d.price_line) + '</span>'
+                    : '<span class="logic-confidence">confidence ' + (d.confidence || 0).toFixed(2) + '</span>';
                 decisionEl.innerHTML =
                     '<div class="logic-decision-main">' +
                     '<span class="action-badge ' + action + '">' + escapeHtml(d.action || '—') + '</span>' +
                     '<strong>' + escapeHtml(d.asset || '—') + '</strong>' +
-                    '<span class="logic-confidence">confidence ' + (d.confidence || 0).toFixed(2) + '</span>' +
+                    priceOrConf +
                     (d.size_usd ? '<span class="logic-size">$' + d.size_usd.toFixed(2) + '</span>' : '') +
                     '</div><p class="logic-reason">' + escapeHtml(d.reason || '') + '</p>';
             } else if (feed.active) {

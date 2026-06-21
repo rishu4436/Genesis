@@ -34,3 +34,18 @@ class GenerateStrategyResponse(BaseModel):
     strategy: dict
     conditions: StrategyConditions
     backtest_preview: dict | None = None
+
+
+class StrategyChatRequest(BaseModel):
+    """Natural-language chat request for Genesis strategy assistant."""
+
+    message: str = Field(min_length=1, max_length=4000)
+    history: list[dict[str, str]] = Field(default_factory=list)
+    include_backtest: bool = True
+
+
+class StrategyTextGenerateRequest(BaseModel):
+    """One-shot natural language → strategy generation."""
+
+    text: str = Field(min_length=1, max_length=4000)
+    include_backtest: bool = True

@@ -12,6 +12,7 @@ import aiosqlite
 from genesis.core.models import (
     AuditRecord,
     CompositeSignal,
+    DcaPositionState,
     Decision,
     PortfolioSnapshot,
     RiskValidation,
@@ -62,6 +63,11 @@ class Database:
                     confidence REAL NOT NULL,
                     data JSON NOT NULL,
                     created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS dca_positions (
+                    symbol TEXT PRIMARY KEY,
+                    data JSON NOT NULL,
+                    updated_at TEXT NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_records(created_at);
                 CREATE INDEX IF NOT EXISTS idx_trades_created ON trades(created_at);
@@ -225,6 +231,35 @@ class Database:
             )
             row = await cursor.fetchone()
             return json.loads(row["data"]) if row else None
+
+    async def get_dca_states(self) -> dict[str, DcaPositionState]:
+        """Load all active DCA ladder positions."""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT symbol, data FROM dca_positions")
+            rows = await cursor.fetchall()
+        states: dict[str, DcaPositionState] = {}
+        for row in rows:
+            payload = json.loads(row["data"])
+            state = DcaPositionState.model_validate(payload)
+            if state.active:
+                states[row["symbol"].upper()] = state
+        return states
+
+    async def upsert_dca_state(self, state: DcaPositionState) -> None:
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                """INSERT INTO dca_positions (symbol, data, updated_at) VALUES (?, ?, ?)
+                   ON CONFLICT(symbol) DO UPDATE SET data=excluded.data, updated_at=excluded.updated_at""",
+                (state.symbol.upper(), state.model_dump_json(), utc_now_iso()),
+            )
+            await db.commit()
+
+    async def clear_dca_state(self, symbol: str) -> None:
+        sym = symbol.upper()
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("DELETE FROM dca_positions WHERE symbol = ?", (sym,))
+            await db.commit()
 
     async def export_audit_trail(self, output_path: str) -> int:
         """Export all audit records to JSON file for judges."""

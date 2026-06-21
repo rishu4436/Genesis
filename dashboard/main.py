@@ -79,7 +79,7 @@ def _genesis_logo_markup(size: int = 48, uid: str = "gen") -> Markup:
 
 
 templates.env.globals["genesis_logo"] = _genesis_logo_markup
-templates.env.globals["asset_version"] = "20260621a"
+templates.env.globals["asset_version"] = "20260621c"
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
@@ -276,6 +276,8 @@ async def strategy_generator_app(request: Request) -> HTMLResponse:
             "active_track": 2,
             "default_asset": "BNB",
             "allowed_token_count": len(rules.allowed_tokens),
+            "assistant_ready": bool(env.xai_api_key),
+            "cmc_configured": bool(env.cmc_api_key or env.cmc_x402_enabled),
         },
     )
 
@@ -413,6 +415,123 @@ async def api_strategy_skill_backtest(
     await db.initialize()
     audits = await db.get_recent_audits(limit)
     return backtest_from_audits(audits, rules, idle_swap_cycles=idle_cycles)
+
+
+def _attach_strategy_file(result: Any) -> dict[str, Any]:
+    """Save generated strategy JSON and add download metadata to API response."""
+    from genesis.strategy_skill.storage import save_strategy_json
+
+    payload = result.model_dump()
+    if not payload.get("strategy"):
+        return payload
+
+    filename, _path = save_strategy_json(payload["strategy"])
+    payload["strategy_file"] = filename
+    payload["download_url"] = f"/api/strategy-skill/files/{filename}"
+    return payload
+
+
+def _build_strategy_cmc_provider() -> Any:
+    """CMC provider for Track 2 Genesis assistant (MCP + optional x402)."""
+    from genesis.data.cmc_provider import CMCProvider
+
+    env = get_env_settings()
+    twak = TWAKProvider.from_env(env)
+    return CMCProvider(
+        mcp_url=env.cmc_mcp_url,
+        api_key=env.cmc_api_key,
+        x402_enabled=env.cmc_x402_enabled,
+        twak=twak,
+        x402_mode=env.cmc_x402_mode,
+        x402_max_payment=env.cmc_x402_max_payment,
+        x402_prefer_network=env.cmc_x402_prefer_network,
+    )
+
+
+async def _strategy_backtest_for_conditions(conditions: Any) -> dict[str, Any] | None:
+    from genesis.strategy_skill.backtest import backtest_from_audits
+    from genesis.strategy_skill.models import StrategyConditions
+
+    if not isinstance(conditions, StrategyConditions) or conditions.backtest_limit <= 0:
+        return None
+    rules = get_rules()
+    db = _get_db()
+    await db.initialize()
+    audits = await db.get_recent_audits(conditions.backtest_limit)
+    return backtest_from_audits(audits, rules, idle_swap_cycles=conditions.idle_cycles)
+
+
+@app.post("/api/strategy-skill/chat")
+async def api_strategy_skill_chat(body: dict[str, Any]) -> dict[str, Any]:
+    """Track 2: Genesis chat — market Q&A or strategy generation from natural language."""
+    from genesis.strategy_skill.grok_generator import ChatMessage, handle_strategy_chat
+    from genesis.strategy_skill.models import StrategyChatRequest
+
+    env = get_env_settings()
+    rules = get_rules()
+    req = StrategyChatRequest.model_validate(body)
+
+    history: list[ChatMessage] = []
+    for item in req.history:
+        role = (item.get("role") or "user").lower()
+        content = (item.get("content") or "").strip()
+        if content and role in ("user", "assistant"):
+            history.append(ChatMessage(role=role, content=content))  # type: ignore[arg-type]
+
+    provider = _build_strategy_cmc_provider()
+    try:
+        result = await handle_strategy_chat(
+            env,
+            rules,
+            provider,
+            req.message,
+            history,
+            include_backtest=req.include_backtest,
+            backtest_fn=_strategy_backtest_for_conditions,
+        )
+        return _attach_strategy_file(result)
+    finally:
+        await provider.close()
+
+
+@app.post("/api/strategy-skill/generate-from-text")
+async def api_strategy_skill_generate_from_text(body: dict[str, Any]) -> dict[str, Any]:
+    """Track 2: natural language → full strategy JSON (Genesis + CMC MCP)."""
+    from genesis.strategy_skill.grok_generator import generate_strategy_from_text
+    from genesis.strategy_skill.models import StrategyTextGenerateRequest
+
+    env = get_env_settings()
+    rules = get_rules()
+    req = StrategyTextGenerateRequest.model_validate(body)
+
+    provider = _build_strategy_cmc_provider()
+    try:
+        result = await generate_strategy_from_text(
+            env,
+            rules,
+            provider,
+            req.text,
+            include_backtest=req.include_backtest,
+            backtest_fn=_strategy_backtest_for_conditions,
+        )
+        return _attach_strategy_file(result)
+    finally:
+        await provider.close()
+
+
+@app.get("/api/strategy-skill/files/{filename}")
+async def api_strategy_skill_file_download(filename: str) -> FileResponse:
+    """Download a generated strategy JSON file."""
+    from genesis.strategy_skill.storage import resolve_strategy_file
+
+    path = resolve_strategy_file(filename)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Strategy file not found")
+    return FileResponse(
+        path=str(path),
+        filename=path.name,
+        media_type="application/json",
+    )
 
 
 @app.post("/api/agent/start")

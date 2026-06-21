@@ -21,7 +21,7 @@ DECISION FRAMEWORK:
   (lowest cmc_rank / highest market_cap_usd in features) — not the highest conviction alone.
 - BUY only when buy_alignment >= 2 (features) AND (technicals >= 0.52 OR sentiment >= 0.55).
 - derivatives and discovery are per-token — do not treat identical values across assets as real edge.
-- SELL: conviction <= sell threshold, bearish signals, or risk reduction needed.
+- SELL: held position reached configured take-profit % from entry — not conviction-based.
 - HOLD: mixed signals, low confidence, cooldown active, or data quality issues.
 - Never BUY stablecoins (USDT, USDC, DAI, FDUSD, etc.) — they are quote cash, not trades.
 
@@ -38,9 +38,9 @@ EXAMPLE 2 — HOLD (mixed signals):
 Signals: ETH conviction=0.48, RSI=52, sentiment=0.45, conflicting news
 Decision: {"action": "HOLD", "asset": "ETH", "reason": "Mixed signals with no clear edge; conviction below buy threshold", "confidence": 0.55, "risk_notes": "Waiting for stronger alignment", "signals_used": ["technicals", "sentiment", "news"]}
 
-EXAMPLE 3 — SELL (risk reduction):
-Signals: CAKE conviction=0.28, drawdown approaching limit, bearish technicals
-Decision: {"action": "SELL", "asset": "CAKE", "size_pct": 50.0, "reason": "Bearish conviction with drawdown risk; reducing exposure", "confidence": 0.72, "risk_notes": "Partial exit to preserve capital", "signals_used": ["technicals", "sentiment"]}
+EXAMPLE 3 — SELL (take-profit):
+Signals: CAKE held, entry $2.10, current $2.35 (+11.9%), take-profit target +10%
+Decision: {"action": "SELL", "asset": "CAKE", "size_pct": 100.0, "reason": "Take-profit SELL: CAKE +11.9% (entry $2.10 → now $2.35, target +10%)", "confidence": 0.85, "risk_notes": "Take-profit exit", "signals_used": ["take_profit"]}
 """
 
 
@@ -65,7 +65,7 @@ RISK LIMITS:
 
 SIGNAL THRESHOLDS:
 - Buy conviction min: {rules.signals.buy_conviction_min}
-- Sell conviction max: {rules.signals.sell_conviction_max}
+- Take-profit exit: +{rules.exit.take_profit_pct:.0f}% from entry (replaces conviction sells)
 
 ALLOWED TOKENS: {', '.join(t.symbol for t in rules.allowed_tokens)}
 PREFERRED PAIRS (TWAK liquid on BSC — prefer these for BUY): {', '.join(rules.preferred_pairs)}

@@ -1,47 +1,65 @@
 (function () {
     'use strict';
 
-    var form = document.getElementById('strategy-form');
-    var btnGenerate = document.getElementById('btn-generate');
+    var agentName =
+        (document.body && document.body.getAttribute('data-agent-name')) || 'Genesis';
+
+    var chatForm = document.getElementById('chat-form');
+    var chatMessage = document.getElementById('chat-message');
+    var btnChatSend = document.getElementById('btn-chat-send');
+    var btnChatClear = document.getElementById('btn-chat-clear');
+    var chatLog = document.getElementById('chat-log');
+    var quickPrompts = document.getElementById('quick-prompts');
+    var strategyResults = document.getElementById('strategy-results');
+
     var btnCopy = document.getElementById('btn-copy');
     var btnDownload = document.getElementById('btn-download');
+    var fileHint = document.getElementById('file-hint');
     var jsonPre = document.getElementById('strategy-json');
-    var summaryPlaceholder = document.getElementById('summary-placeholder');
-    var summaryContent = document.getElementById('summary-content');
     var summaryNl = document.getElementById('summary-nl');
     var summaryGrid = document.getElementById('summary-grid');
     var backtestMetrics = document.getElementById('backtest-metrics');
 
     var lastStrategy = null;
+    var chatHistory = [];
+    var welcomeShown = false;
 
-    function formPayload() {
-        var fd = new FormData(form);
-        return {
-            primary_asset: (fd.get('primary_asset') || 'BNB').toString().trim().toUpperCase(),
-            timeframe: fd.get('timeframe') || '5m',
-            risk_profile: fd.get('risk_profile') || 'conservative',
-            market_regime: fd.get('market_regime') || 'bullish',
-            take_profit_pct: parseFloat(fd.get('take_profit_pct')) || 12,
-            stop_loss_pct: parseFloat(fd.get('stop_loss_pct')) || 6,
-            backtest_limit: parseInt(fd.get('backtest_limit'), 10) || 50,
-            idle_cycles: parseInt(fd.get('idle_cycles'), 10) || 0,
-            focus_signals: ['technicals', 'sentiment', 'onchain', 'news'],
-        };
+    var WELCOME_MESSAGE =
+        'Hello! I\u2019m ' +
+        agentName +
+        '. What would you like to do today?\n\n' +
+        '\u2022 Explore the market \u2014 prices, trends, sentiment, and live CMC data\n' +
+        '\u2022 Generate a strategy \u2014 describe your idea and I\u2019ll build a backtestable JSON spec\n\n' +
+        'Pick a quick option below or type your own message.';
+
+    function escapeHtml(s) {
+        return s
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
     }
 
-    function updateDownloadLink(payload) {
-        var qs = new URLSearchParams({
-            primary_asset: payload.primary_asset,
-            risk_profile: payload.risk_profile,
-            market_regime: payload.market_regime,
-        });
-        btnDownload.href = '/api/strategy-skill/download?' + qs.toString();
-        btnDownload.download = 'genesis-strategy-' + payload.primary_asset.toLowerCase() + '.json';
+    function appendChatBubble(role, text, meta) {
+        if (!chatLog) return;
+        var bubble = document.createElement('div');
+        bubble.className = 'track2-chat-bubble track2-chat-' + role;
+        var body = '<p>' + escapeHtml(text) + '</p>';
+        if (meta) {
+            body += '<span class="track2-chat-meta">' + escapeHtml(meta) + '</span>';
+        }
+        bubble.innerHTML = body;
+        chatLog.appendChild(bubble);
+        chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    function showWelcome() {
+        if (welcomeShown || !chatLog) return;
+        welcomeShown = true;
+        appendChatBubble('assistant', WELCOME_MESSAGE, agentName);
+        chatHistory.push({ role: 'assistant', content: WELCOME_MESSAGE });
     }
 
     function renderSummary(strategy) {
-        summaryPlaceholder.hidden = true;
-        summaryContent.hidden = false;
         summaryNl.textContent = strategy.natural_language_summary || '';
 
         var scope = strategy.market_scope || {};
@@ -51,15 +69,15 @@
         var sizing = strategy.position_sizing || {};
 
         var cells = [
-            ['Asset', scope.primary_asset || '—'],
-            ['Timeframe', scope.timeframe || '—'],
-            ['Buy conviction ≥', entry.min_conviction != null ? entry.min_conviction : '—'],
-            ['Sell conviction ≤', (exit.signal_sell || {}).sell_max_conviction || '—'],
+            ['Asset', scope.primary_asset || '\u2014'],
+            ['Timeframe', scope.timeframe || '\u2014'],
+            ['Buy conviction \u2265', entry.min_conviction != null ? entry.min_conviction : '\u2014'],
+            ['Sell conviction \u2264', (exit.signal_sell || {}).sell_max_conviction || '\u2014'],
             ['Take profit', (exit.take_profit || {}).value_pct + '%'],
             ['Stop loss', (exit.stop_loss || {}).value_pct + '%'],
             ['Position size', sizing.spot_stable_pct + '% stables'],
-            ['Target R:R', perf.target_risk_reward_ratio || '—'],
-            ['Est. win rate', (perf.estimated_win_rate_pct || '—') + '%'],
+            ['Target R:R', perf.target_risk_reward_ratio || '\u2014'],
+            ['Est. win rate', (perf.estimated_win_rate_pct || '\u2014') + '%'],
         ];
 
         summaryGrid.innerHTML = cells
@@ -105,62 +123,172 @@
             .join('');
     }
 
-    function renderJson(strategy) {
-        var text = JSON.stringify(strategy, null, 2);
+    function strategyFilename(strategy) {
+        var asset = ((strategy.market_scope || {}).primary_asset || 'strategy').toLowerCase();
+        return 'genesis-strategy-' + asset + '.json';
+    }
+
+    function downloadStrategyLocal(strategy) {
+        var blob = new Blob([JSON.stringify(strategy, null, 2)], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = strategyFilename(strategy);
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    function renderStrategyOutput(data) {
+        if (!data.strategy) return;
+
+        lastStrategy = data.strategy;
+        if (strategyResults) strategyResults.hidden = false;
+
+        renderSummary(data.strategy);
+        renderBacktest(data.backtest_preview);
+
+        var text = JSON.stringify(data.strategy, null, 2);
         jsonPre.innerHTML = '<code>' + escapeHtml(text) + '</code>';
-        btnCopy.disabled = false;
-        lastStrategy = strategy;
-    }
 
-    function escapeHtml(s) {
-        return s
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;');
-    }
+        if (btnCopy) btnCopy.disabled = false;
 
-    async function generate() {
-        var payload = formPayload();
-        updateDownloadLink(payload);
-        btnGenerate.disabled = true;
-        btnGenerate.textContent = 'Generating…';
+        var filename = data.strategy_file || strategyFilename(data.strategy);
+        if (btnDownload) {
+            if (data.download_url) {
+                btnDownload.href = data.download_url;
+                btnDownload.download = filename;
+                btnDownload.hidden = false;
+            } else {
+                btnDownload.href = '#';
+                btnDownload.hidden = false;
+                btnDownload.onclick = function (e) {
+                    e.preventDefault();
+                    downloadStrategyLocal(data.strategy);
+                };
+            }
+        }
 
-        try {
-            var res = await fetch('/api/strategy-skill/generate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-            });
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            var data = await res.json();
-            renderSummary(data.strategy);
-            renderBacktest(data.backtest_preview);
-            renderJson(data.strategy);
-        } catch (err) {
-            jsonPre.innerHTML =
-                '<code class="track2-error">Failed to generate: ' + escapeHtml(String(err)) + '</code>';
-        } finally {
-            btnGenerate.disabled = false;
-            btnGenerate.textContent = 'Generate Strategy';
+        if (fileHint) {
+            fileHint.hidden = false;
+            fileHint.textContent = data.strategy_file
+                ? 'Saved as ' + data.strategy_file + ' — download below or copy JSON.'
+                : 'Download your backtestable strategy JSON below.';
+        }
+
+        if (strategyResults) {
+            strategyResults.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     }
 
-    btnGenerate.addEventListener('click', generate);
+    async function sendMessage(text) {
+        text = (text || '').trim();
+        if (!text) return;
 
-    btnCopy.addEventListener('click', function () {
-        if (!lastStrategy) return;
-        navigator.clipboard.writeText(JSON.stringify(lastStrategy, null, 2)).then(function () {
-            btnCopy.textContent = 'Copied!';
-            setTimeout(function () {
-                btnCopy.textContent = 'Copy JSON';
-            }, 1500);
+        if (quickPrompts) quickPrompts.hidden = true;
+
+        appendChatBubble('user', text);
+        chatHistory.push({ role: 'user', content: text });
+        if (chatMessage) chatMessage.value = '';
+
+        btnChatSend.disabled = true;
+        btnChatSend.textContent = 'Thinking\u2026';
+
+        try {
+            var res = await fetch('/api/strategy-skill/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    message: text,
+                    history: chatHistory.slice(0, -1),
+                    include_backtest: true,
+                }),
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            var data = await res.json();
+
+            var meta =
+                data.intent === 'generate_strategy'
+                    ? 'Strategy ready'
+                    : data.intent === 'answer'
+                      ? 'Market insight'
+                      : '';
+            if (data.symbols_detected && data.symbols_detected.length) {
+                meta += (meta ? ' \u00b7 ' : '') + data.symbols_detected.join(', ');
+            }
+
+            appendChatBubble('assistant', data.reply || 'No response.', meta || agentName);
+            chatHistory.push({ role: 'assistant', content: data.reply || '' });
+
+            if (data.strategy) {
+                renderStrategyOutput(data);
+            }
+        } catch (err) {
+            appendChatBubble(
+                'assistant',
+                'Something went wrong. Please try again. (' + String(err) + ')',
+                'error'
+            );
+        } finally {
+            btnChatSend.disabled = false;
+            btnChatSend.textContent = 'Send';
+        }
+    }
+
+    if (chatForm) {
+        chatForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            sendMessage(chatMessage ? chatMessage.value : '');
         });
-    });
+    }
 
-    form.addEventListener('submit', function (e) {
-        e.preventDefault();
-        generate();
-    });
+    if (btnChatClear) {
+        btnChatClear.addEventListener('click', function () {
+            chatHistory = [];
+            welcomeShown = false;
+            if (chatLog) chatLog.innerHTML = '';
+            if (quickPrompts) quickPrompts.hidden = false;
+            if (strategyResults) strategyResults.hidden = true;
+            lastStrategy = null;
+            if (btnCopy) btnCopy.disabled = true;
+            if (btnDownload) {
+                btnDownload.hidden = true;
+                btnDownload.onclick = null;
+            }
+            if (fileHint) fileHint.hidden = true;
+            showWelcome();
+        });
+    }
 
-    generate();
+    if (chatMessage) {
+        chatMessage.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage(chatMessage.value);
+            }
+        });
+    }
+
+    if (quickPrompts) {
+        quickPrompts.addEventListener('click', function (e) {
+            var chip = e.target.closest('[data-prompt]');
+            if (!chip) return;
+            sendMessage(chip.getAttribute('data-prompt'));
+        });
+    }
+
+    if (btnCopy) {
+        btnCopy.addEventListener('click', function () {
+            if (!lastStrategy) return;
+            navigator.clipboard.writeText(JSON.stringify(lastStrategy, null, 2)).then(function () {
+                btnCopy.textContent = 'Copied!';
+                setTimeout(function () {
+                    btnCopy.textContent = 'Copy JSON';
+                }, 1500);
+            });
+        });
+    }
+
+    showWelcome();
 })();

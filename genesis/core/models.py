@@ -168,6 +168,39 @@ class ExecutionConfig(BaseModel):
     retry_delay_seconds: int = 5
 
 
+class ExitRulesConfig(BaseModel):
+    """Spot exit rules — take-profit replaces conviction-based sells when enabled."""
+
+    take_profit_pct: float = 10.0
+    prefer_take_profit_over_conviction: bool = True
+
+
+class DcaDipConfig(BaseModel):
+    """
+    DCA dip-buy: top-N CMC coins down >= trigger in 24h, then ladder buys every step_drop
+    until stables depleted; exit at take_profit_pct from average entry.
+    """
+
+    enabled: bool = False
+    max_cmc_rank: int = 100
+    trigger_drop_24h_pct: float = 20.0
+    step_drop_pct: float = 10.0
+    take_profit_pct: float = 20.0
+    max_concurrent_positions: int = 3
+
+
+class DcaPositionState(BaseModel):
+    """Persisted DCA ladder state per symbol."""
+
+    symbol: str
+    buy_count: int = 0
+    last_buy_price_usd: float = 0.0
+    avg_entry_price_usd: float = 0.0
+    total_cost_usd: float = 0.0
+    trigger_change_24h_pct: float = 0.0
+    active: bool = True
+
+
 class PerpsConfig(BaseModel):
     """PancakeSwap Perps (ApolloX Diamond) settings."""
 
@@ -211,6 +244,8 @@ class RulesConfig(BaseModel):
     signal_weights: SignalWeights = Field(default_factory=SignalWeights)
     signals: SignalThresholds = Field(default_factory=SignalThresholds)
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
+    exit: ExitRulesConfig = Field(default_factory=ExitRulesConfig)
+    dca_dip: DcaDipConfig = Field(default_factory=DcaDipConfig)
     perps: PerpsConfig = Field(default_factory=PerpsConfig)
 
 
@@ -249,6 +284,13 @@ class Decision(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     risk_notes: str = ""
     signals_used: list[str] = Field(default_factory=list)
+    current_price_usd: float | None = None
+    take_profit_pct: float | None = None
+    take_profit_price_usd: float | None = None
+    exit_trigger: str | None = None
+    strategy_mode: str | None = None
+    change_24h_pct: float | None = None
+    dca_step: int | None = None
     timestamp: datetime = Field(default_factory=utc_now)
 
     @field_validator("size_pct")

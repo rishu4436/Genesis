@@ -992,9 +992,13 @@ def _start_quick_tunnel(port: int, wait_seconds: int = 60) -> tuple[str, int]:
 
     origin = f"http://127.0.0.1:{port}"
     if sys.platform == "win32":
-        # Append logging — RedirectStandardOutput causes cloudflared to exit on Windows.
+        # Keep a visible CMD window open — start /b and RedirectStandardOutput both
+        # cause cloudflared to exit when the parent shell session ends.
         subprocess.run(
-            f'start "genesis-tunnel" /b "{exe}" tunnel --url {origin} >> "{log_path}" 2>&1',
+            (
+                f'start "genesis-tunnel" cmd /k "cd /d "{PROJECT_ROOT}" && '
+                f'"{exe}" tunnel --url {origin} >> "{log_path}" 2>&1"'
+            ),
             shell=True,
             check=True,
         )
